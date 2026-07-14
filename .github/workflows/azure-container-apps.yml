@@ -36,6 +36,7 @@ jobs:
           context: backend
           platforms: linux/amd64
           push: true
+          provenance: false
           tags: ${{ env.IMAGE }}:${{ github.sha }},${{ env.IMAGE }}:latest
 
       - name: Azure login
