@@ -7,7 +7,7 @@ from app.database import Base, SessionLocal, engine
 from app.routers import challenges
 from app.seed import seed_challenges
 
-app = FastAPI(title="NetCode API")
+app = FastAPI(title="NetCode API", version="0.1.1")
 
 default_origins = "http://localhost:5173,http://localhost:5174"
 allowed_origins = os.environ.get("ALLOWED_ORIGINS", default_origins).split(",")
