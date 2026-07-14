@@ -1,0 +1,80 @@
+{
+  "id": "dns-split-horizon-005",
+  "title": "VPN Users Land on the Public Site Instead of the Internal App",
+  "track": "DNS",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "Employees connected over the corporate VPN report that app.corp.com loads the public marketing landing page (meant for customers) instead of the internal employee portal. The same hostname works correctly for users physically in the office. Started after last night's DNS maintenance window. VPN users can reach other internal resources fine.",
+    "reportedBy": "Remote Employee Escalation (multiple reports)",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "app.corp.com is intentionally split-horizon: internally it should resolve to the internal app server 10.5.30.20, while externally (for customers) it resolves via public DNS to the public-facing edge at 203.0.113.50. In-office clients query internal resolver dns-int-01 (10.0.0.60), which authoritatively holds an internal zone override for app.corp.com pointing to 10.5.30.20. VPN clients are assigned dns-int-01 as their DNS server via the VPN concentrator's client config, and dns-int-01 in turn conditionally forwards corp.com queries -- last night's maintenance accidentally changed dns-int-01's conditional forwarder for corp.com to point at the public recursive resolver instead of resolving it authoritatively.",
+    "nodes": [
+      { "id": "vpn-client", "label": "VPN Clients (10.8.0.0/24)", "type": "client" },
+      { "id": "office-client", "label": "Office Clients (10.5.10.0/24)", "type": "client" },
+      { "id": "vpn-concentrator", "label": "vpn-gw-01", "type": "firewall" },
+      { "id": "dns-int-01", "label": "dns-int-01 (10.0.0.60, internal authoritative)", "type": "dns-server" },
+      { "id": "dns-public", "label": "Public Recursive Resolver (8.8.8.8)", "type": "dns-server" },
+      { "id": "app-internal", "label": "app-internal (10.5.30.20)", "type": "server" },
+      { "id": "app-public-edge", "label": "app-public-edge (203.0.113.50)", "type": "server" }
+    ],
+    "links": [
+      { "from": "office-client", "to": "dns-int-01", "label": "resolves app.corp.com internally" },
+      { "from": "vpn-client", "to": "vpn-concentrator", "label": "assigns DNS 10.0.0.60" },
+      { "from": "vpn-concentrator", "to": "dns-int-01", "label": "VPN client resolver" },
+      { "from": "dns-int-01", "to": "dns-public", "label": "conditional forward for corp.com (misconfigured last night)" },
+      { "from": "dns-int-01", "to": "app-internal", "label": "correct internal answer (should be authoritative)" },
+      { "from": "dns-public", "to": "app-public-edge", "label": "public answer" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "dns-int-01 change log",
+      "content": "2026-07-13 23:40:11 CHANGE by svc-dns-automation: zone corp.com conditional-forwarder updated\n2026-07-13 23:40:11   old forwarders: [] (authoritative, no forwarding)\n2026-07-13 23:40:11   new forwarders: [8.8.8.8]\n2026-07-13 23:40:11 CHANGE COMMENT: 'bulk forwarder cleanup - removing legacy entries' (ticket MAINT-4471)"
+    },
+    {
+      "source": "dns-int-01 query log",
+      "content": "08:02:14 query: app.corp.com IN A from 10.8.0.55 (VPN client)\n08:02:14 zone corp.com: forwarding query to 8.8.8.8 (conditional forwarder)\n08:02:14 response: 203.0.113.50 (from forwarder)\n08:02:20 query: app.corp.com IN A from 10.5.10.22 (office client)\n08:02:20 zone corp.com: NOTE - query matches locally-hosted override record, answered authoritatively\n08:02:20 response: 10.5.30.20 (authoritative, no forward)"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "dns-int-01",
+      "command": "show zone corp.com",
+      "output": "Zone: corp.com\nType: conditional-forward\nForward-to: 8.8.8.8\nLocal override records: app.corp.com -> 10.5.30.20 (marked STALE - not served while zone type is conditional-forward)\nNote: zone type was 'primary (authoritative)' with delegated override prior to 2026-07-13 23:40."
+    },
+    {
+      "device": "vpn-client (sample, remote employee)",
+      "command": "nslookup app.corp.com",
+      "output": "Server:  10.0.0.60\nAddress: 10.0.0.60#53\nNon-authoritative answer:\nName:   app.corp.com\nAddress: 203.0.113.50"
+    },
+    {
+      "device": "office-client (sample, in-office)",
+      "command": "nslookup app.corp.com",
+      "output": "Server:  10.0.0.60\nAddress: 10.0.0.60#53\nName:   app.corp.com\nAddress: 10.5.30.20"
+    }
+  ],
+  "monitoring": {
+    "metric": "dns_zone_answer_source_corp_com",
+    "notes": "The zone-answer-source panel for corp.com on dns-int-01 shows 100% of answers sourced 'authoritative (local override)' up until 2026-07-13 23:40, at which point it flips to 100% 'forwarded (8.8.8.8)' for all VPN-sourced queries. Oddly, office-client queries for app.corp.com still show 'authoritative' -- because those clients hit a caching resolver layer upstream that had already cached the correct 10.5.30.20 answer before the change and hasn't expired it yet, masking the issue for in-office users so far."
+  },
+  "hints": [
+    "The internal app server address (10.5.30.20) and public address (203.0.113.50) are both real and both 'work' -- this isn't a broken record, it's the wrong record being served to the wrong audience.",
+    "Check dns-int-01's change log around last night's maintenance window for anything touching the corp.com zone or its forwarders.",
+    "Last night's 'forwarder cleanup' accidentally changed the corp.com zone on dns-int-01 from authoritative (serving the internal override 10.5.30.20) to a conditional forwarder pointing at 8.8.8.8, so VPN clients now get the public answer instead of the internal one."
+  ],
+  "solution": {
+    "root_cause": "Last night's DNS maintenance (ticket MAINT-4471) changed the corp.com zone on dns-int-01 from an authoritative zone serving a local override for app.corp.com (10.5.30.20) to a conditional forwarder pointing at the public resolver 8.8.8.8. VPN clients, which rely on dns-int-01 for all resolution, now get the public answer (203.0.113.50) for app.corp.com instead of the internal one; office clients are temporarily masked by a stale upstream cache.",
+    "fix": "Revert the corp.com zone on dns-int-01 back to authoritative/primary (remove the 8.8.8.8 conditional forwarder) so the local override record for app.corp.com (10.5.30.20) is served again to internal and VPN clients, then flush caches on dns-int-01 and downstream resolvers.",
+    "acceptable_answers": [
+      "conditional forwarder",
+      "split horizon",
+      "split-horizon dns",
+      "zone changed to forward",
+      "corp.com forwarder misconfigured",
+      "8.8.8.8"
+    ]
+  }
+}

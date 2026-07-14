@@ -1,0 +1,68 @@
+{
+  "id": "dhcp-scope-exhaustion-001",
+  "title": "New Devices Can't Get an IP in the BYOD Conference VLAN",
+  "track": "DHCP",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Attendees in the 3rd floor conference center (BYOD-VLAN, VLAN 50) report their laptops and phones show 'Limited connectivity' / 'No internet' and never get an IP address. Staff devices already connected earlier this morning are fine. Issue started around 10:30 AM when a 200-person all-hands meeting began.",
+    "reportedBy": "Front Desk / Facilities IT",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "The conference center BYOD network (VLAN 50, 10.50.4.0/24) is served by a central DHCP server dhcp-01 (10.1.1.5) via IP helper on the floor's L3 switch sw-3f-core. The scope for VLAN 50 was originally sized for a small huddle room and has not been resized since the conference center was expanded to seat 200 people.",
+    "nodes": [
+      { "id": "client-byod", "label": "BYOD Clients (VLAN 50, 10.50.4.0/24)", "type": "client" },
+      { "id": "sw-3f-core", "label": "sw-3f-core (10.50.4.1)", "type": "switch" },
+      { "id": "dhcp-01", "label": "dhcp-01 (10.1.1.5)", "type": "dhcp-server" }
+    ],
+    "links": [
+      { "from": "client-byod", "to": "sw-3f-core", "label": "VLAN 50 access ports" },
+      { "from": "sw-3f-core", "to": "dhcp-01", "label": "ip helper-address 10.1.1.5" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "dhcp-01 service log",
+      "content": "10:31:02 DHCPDISCOVER from 3c:22:fb:11:aa:02 via 10.50.4.1: no free leases in scope 10.50.4.0/24\n10:31:02 DHCPNAK to 3c:22:fb:11:aa:02\n10:31:19 DHCPDISCOVER from a4:5e:60:cc:19:44 via 10.50.4.1: no free leases in scope 10.50.4.0/24\n10:31:19 DHCPNAK to a4:5e:60:cc:19:44\n10:31:45 DHCPDISCOVER from 88:e9:fe:02:7d:10 via 10.50.4.1: no free leases in scope 10.50.4.0/24\n10:31:45 DHCPNAK to 88:e9:fe:02:7d:10"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "dhcp-01",
+      "command": "show scope 10.50.4.0/24 statistics",
+      "output": "Scope: 10.50.4.0/24 (BYOD-VLAN-50)\nAddress range: 10.50.4.10 - 10.50.4.30 (21 usable addresses)\nAddresses leased: 21/21 (100%)\nAddresses available: 0\nDefault lease time: 24 hours\nPending offers: 14"
+    },
+    {
+      "device": "dhcp-01",
+      "command": "show scope 10.50.4.0/24 leases | wc -l",
+      "output": "21"
+    },
+    {
+      "device": "sw-3f-core",
+      "command": "show ip dhcp relay statistics vlan 50",
+      "output": "VLAN 50 relay agent (ip helper-address 10.1.1.5)\nDHCPDISCOVER forwarded: 187\nDHCPOFFER relayed to clients: 21\nDHCPNAK relayed to clients: 166"
+    }
+  ],
+  "monitoring": {
+    "metric": "dhcp_scope_utilization_vlan50",
+    "notes": "Dashboard shows scope 10.50.4.0/24 utilization sitting at a steady 60-70% (12-14 of 21 addresses) for the past month, then spiking to 100% at 10:29 AM today, right as the all-hands meeting began, and staying pinned at 100% since. The relay counters on sw-3f-core confirm DHCPDISCOVER traffic is reaching dhcp-01 fine — it's the pool itself that's out of addresses."
+  },
+  "hints": [
+    "Confirm the DHCP relay/helper path is actually working before assuming it's a relay problem — check whether discovers are reaching the DHCP server at all.",
+    "Look at the scope statistics on dhcp-01 for VLAN 50 specifically, not just overall server health.",
+    "The scope 10.50.4.0/24 only has 21 usable addresses (10.50.4.10-10.50.4.30) and all 21 are leased — the pool was sized for a small huddle room, not a 200-person conference."
+  ],
+  "solution": {
+    "root_cause": "The DHCP scope for VLAN 50 (10.50.4.10-10.50.4.30, only 21 usable addresses) is fully exhausted because it was sized for a small huddle room and never resized after the conference center was expanded to seat 200 people. New DHCPDISCOVER requests are correctly relayed to dhcp-01 but receive DHCPNAK since no free leases remain.",
+    "fix": "Expand the scope range for VLAN 50 (e.g. to a /23 or larger contiguous range) and/or shorten the lease time for that VLAN to free up addresses faster between meetings, then verify utilization drops back below capacity.",
+    "acceptable_answers": [
+      "scope exhaust",
+      "scope is full",
+      "no free leases",
+      "pool too small",
+      "scope too small",
+      "10.50.4.0/24 exhausted"
+    ]
+  }
+}

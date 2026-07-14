@@ -1,0 +1,222 @@
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-h);
+  text-decoration: none;
+}
+
+.points-total {
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.challenge-card {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg-alt);
+  transition: border-color 0.15s;
+}
+
+.challenge-card:hover {
+  border-color: var(--accent);
+}
+
+.challenge-card.solved {
+  border-color: var(--success);
+}
+
+.challenge-card h3 {
+  margin: 8px 0 4px;
+}
+
+.challenge-card-header {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.badge.difficulty-easy {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.badge.difficulty-medium {
+  color: #9a6700;
+  border-color: #9a6700;
+}
+
+.badge.difficulty-hard {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.badge.solved-badge {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: var(--success);
+}
+
+.points {
+  color: var(--text);
+  opacity: 0.7;
+  margin: 0;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 16px;
+  text-decoration: none;
+}
+
+.challenge-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.challenge-detail-header h1 {
+  font-size: 26px;
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  background: var(--bg-alt);
+}
+
+.ticket-meta {
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+
+.priority-high {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.priority-medium {
+  color: #9a6700;
+  font-weight: 600;
+}
+
+.priority-low {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.topology-links {
+  padding-left: 20px;
+}
+
+.link-label {
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+
+.log-block,
+.cli-block {
+  margin-bottom: 12px;
+}
+
+.log-source,
+.cli-command {
+  margin: 0 0 4px;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+.metric-name {
+  margin-bottom: 6px;
+}
+
+form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+form textarea {
+  margin-top: 6px;
+  font-weight: normal;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.hints-list {
+  margin-top: 16px;
+  padding-left: 20px;
+}
+
+.result-feedback {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.result-feedback.correct {
+  background: var(--success-bg);
+  border-color: var(--success);
+}
+
+.result-feedback.incorrect {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+}
+
+.result-headline {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.error {
+  color: var(--danger);
+}

@@ -1,0 +1,72 @@
+{
+  "id": "routing-bgp-as-mismatch-004",
+  "title": "eBGP Peering Won't Establish With New Transit Provider",
+  "track": "Routing",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "The new eBGP session to transit provider NorthStar Networks was supposed to go live this morning but has never come up. edge-rtr01 shows the peering session stuck in Active/Idle and no prefixes are being learned from the new provider, so outbound traffic is still all going out the existing single ISP link.",
+    "reportedBy": "Network Engineering (peering turn-up ticket)",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "edge-rtr01 (AS 65010, our enterprise AS) has an existing eBGP session with our primary ISP and is being configured for a second eBGP session directly to NorthStar Networks' edge router ns-peer-edge04 (AS 64500) over a newly provisioned cross-connect at 198.51.100.0/30. Both sides exchanged the peering LOA (Letter of Authorization) which lists the AS numbers and IPs to use.",
+    "nodes": [
+      { "id": "edge-rtr01", "label": "edge-rtr01 (AS 65010, 198.51.100.1)", "type": "router" },
+      { "id": "ns-peer-edge04", "label": "ns-peer-edge04 (AS 64500, 198.51.100.2)", "type": "router" },
+      { "id": "internet", "label": "NorthStar Networks / Internet", "type": "server" }
+    ],
+    "links": [
+      { "from": "edge-rtr01", "to": "ns-peer-edge04", "label": "new eBGP cross-connect, 198.51.100.0/30" },
+      { "from": "ns-peer-edge04", "to": "internet", "label": "transit" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "edge-rtr01 syslog",
+      "content": "Jul 14 09:10:02 edge-rtr01 %BGP-5-ADJCHANGE: neighbor 198.51.100.2 Down BGP Notification sent\nJul 14 09:10:02 edge-rtr01 %BGP-3-NOTIFICATION: sent to neighbor 198.51.100.2 2/2 (peer in wrong AS) 2 bytes FDE4\nJul 14 09:10:05 edge-rtr01 %BGP-5-ADJCHANGE: neighbor 198.51.100.2 Up-to-Down state change, reason: Peer AS mismatch"
+    },
+    {
+      "source": "NorthStar NOC email",
+      "content": "Subject: RE: Peering turn-up - AS64500 <-> AS65010\nHi team, our edge (ns-peer-edge04) is configured and sees TCP connections arriving from your side on port 179 but the session resets almost immediately with an OPEN message error. Can you confirm the remote-as value you have configured for us? Our AS is 64500."
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "edge-rtr01",
+      "command": "show ip bgp summary",
+      "output": "BGP router identifier 198.51.100.1, local AS number 65010\nNeighbor        V    AS  MsgRcvd  MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd\n198.51.100.2    4  64599        3        3        1    0    0 00:00:12 Active"
+    },
+    {
+      "device": "edge-rtr01",
+      "command": "show running-config | section router bgp",
+      "output": "router bgp 65010\n neighbor 198.51.100.2 remote-as 64599\n neighbor 198.51.100.2 description NorthStar-Networks-Transit\n neighbor 198.51.100.2 password ********"
+    },
+    {
+      "device": "ns-peer-edge04",
+      "command": "show ip bgp neighbor 198.51.100.1",
+      "output": "BGP neighbor is 198.51.100.1, remote AS 65010, external link\n  BGP state = Idle, Last read never, Last write never\n  Notification: received 2/2 (peer in wrong AS)\n  Configured local AS is 64500"
+    }
+  ],
+  "monitoring": {
+    "metric": "bgp_session_state_ns_peer",
+    "notes": "The peering dashboard shows the session to 198.51.100.2 flapping between Idle and Active every ~30-60 seconds since the session was first configured at 09:05, never reaching Established. No prefixes have ever been received on this session (PfxRcd has stayed at 0 the entire time), consistent with a session-establishment failure rather than a route-policy or filtering issue."
+  },
+  "hints": [
+    "The session never reaches Established and BGP notification code 2/2 is being sent — that specific error code means 'peer in wrong AS', an OPEN message error.",
+    "Compare the remote-as configured on edge-rtr01 for neighbor 198.51.100.2 against NorthStar's actual AS number from the LOA.",
+    "edge-rtr01 has 'neighbor 198.51.100.2 remote-as 64599' configured, but NorthStar's edge router ns-peer-edge04 is actually in AS 64500, not 64599 — a typo'd remote AS number."
+  ],
+  "solution": {
+    "root_cause": "edge-rtr01 was configured with 'neighbor 198.51.100.2 remote-as 64599', a typo of NorthStar Networks' actual AS number, 64500. BGP OPEN messages include the sender's AS, and when it doesn't match the configured remote-as, the session is rejected with notification code 2/2 (OPEN Message Error, peer in wrong AS), so the session stays in Active/Idle and never reaches Established.",
+    "fix": "Correct the neighbor statement on edge-rtr01 to 'neighbor 198.51.100.2 remote-as 64500' to match NorthStar's actual AS number from the peering LOA.",
+    "acceptable_answers": [
+      "wrong remote-as",
+      "remote as mismatch",
+      "as 64599",
+      "as 64500",
+      "peer in wrong as",
+      "incorrect remote as number"
+    ]
+  }
+}

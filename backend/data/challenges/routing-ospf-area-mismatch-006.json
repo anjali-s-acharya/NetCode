@@ -1,0 +1,79 @@
+{
+  "id": "routing-ospf-area-mismatch-006",
+  "title": "Partial Route Visibility Across the OSPF Backbone After ABR Interface Change",
+  "track": "Routing",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "Since a maintenance window last night on abr-hq01, hosts on the R&D lab subnet (10.75.4.0/24, area 40) can reach some parts of the network but not others. Specifically, R&D can reach the HQ backbone (area 0) and area 40's other subnets fine, but cannot reach anything in the Sales area (area 20), and Sales users report R&D printers/servers as unreachable too. Other inter-area traffic (e.g. area 20 to area 0) is unaffected.",
+    "reportedBy": "R&D Network Team",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "abr-hq01 is an OSPF Area Border Router connecting area 0 (backbone), area 20 (Sales, via Gi0/1), and area 40 (R&D, via Gi0/2). All inter-area traffic between area 20 and area 40 must transit area 0 through abr-hq01, since OSPF requires all non-backbone areas to connect through area 0. During last night's maintenance, Gi0/2 was reconfigured as part of a VLAN cleanup and its OSPF area assignment was accidentally changed.",
+    "nodes": [
+      { "id": "rd-subnet", "label": "R&D Lab (10.75.4.0/24, Area 40)", "type": "client" },
+      { "id": "sales-subnet", "label": "Sales LAN (10.75.2.0/24, Area 20)", "type": "client" },
+      { "id": "abr-hq01", "label": "abr-hq01 (ABR: Area 0 / Area 20 / Area 40)", "type": "router" },
+      { "id": "backbone", "label": "Area 0 Backbone", "type": "router" }
+    ],
+    "links": [
+      { "from": "sales-subnet", "to": "abr-hq01", "label": "Gi0/1, intended Area 20" },
+      { "from": "rd-subnet", "to": "abr-hq01", "label": "Gi0/2, intended Area 40 (misconfigured as Area 20 last night)" },
+      { "from": "abr-hq01", "to": "backbone", "label": "Gi0/0, Area 0" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "abr-hq01 syslog",
+      "content": "Jul 13 23:41:07 abr-hq01 %SYS-5-CONFIG_I: Configured from console (VLAN cleanup - CHG0042117)\nJul 13 23:41:09 abr-hq01 %OSPF-5-ADJCHG: Process 1, Nbr 10.75.4.2 on GigabitEthernet0/2 from FULL to DOWN, Interface down or area changed\nJul 13 23:41:22 abr-hq01 %OSPF-5-ADJCHG: Process 1, Nbr 10.75.4.2 on GigabitEthernet0/2 from LOADING to FULL"
+    },
+    {
+      "source": "rd-lab-sw01 syslog",
+      "content": "Jul 14 08:15:03 rd-lab-sw01 %OSPF-5-ADJCHG: Process 1, Nbr 10.75.4.1 (abr-hq01) on Vlan40 from FULL to FULL\nJul 14 08:15:03 rd-lab-sw01 note: adjacency stable, but LSDB shows area 20 LSAs only, no area 0 summary LSAs for 10.75.2.0/24 received as expected for cross-area routing"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "abr-hq01",
+      "command": "show ip ospf interface brief",
+      "output": "Interface    PID   Area            IP Address/Mask    Cost  State Nbrs F/C\nGi0/0        1     0               10.75.0.1/30        1     P2P  1/1\nGi0/1        1     20              10.75.2.1/24         1     DR   3/3\nGi0/2        1     20              10.75.4.1/24         1     DR   2/2"
+    },
+    {
+      "device": "abr-hq01",
+      "command": "show ip ospf",
+      "output": "Routing Process \"ospf 1\" with ID 10.75.0.1\n Area BACKBONE(0)\n   Number of interfaces in this area is 1\n Area (20)\n   Number of interfaces in this area is 2\n   It is a stub area\n Area (40)\n   Number of interfaces in this area is 0\n   No interfaces currently active in area 40"
+    },
+    {
+      "device": "sales-edge-sw",
+      "command": "show ip route ospf | include 10.75.4",
+      "output": "% Network not in table"
+    },
+    {
+      "device": "rd-lab-sw01",
+      "command": "show ip route ospf | include 10.75.2",
+      "output": "% Network not in table"
+    }
+  ],
+  "monitoring": {
+    "metric": "ospf_area_lsa_summary_abr_hq01",
+    "notes": "The OSPF topology monitor shows abr-hq01 has reported zero active interfaces in area 40 since 23:41 last night, exactly matching the VLAN cleanup change window. Type-3 Summary LSAs for 10.75.4.0/24 that used to be injected into area 0 (and from there into area 20) stopped appearing at the same timestamp. Meanwhile area 20's summary LSA count increased by one, consistent with Gi0/2 having been merged into area 20 instead of area 40."
+  },
+  "hints": [
+    "R&D can reach area 0 fine but not Sales (area 20), and Sales can't reach R&D — but both can reach the backbone. That pattern suggests one area's routes aren't being summarized into area 0 correctly by the ABR.",
+    "Check which OSPF area each interface on abr-hq01 is actually assigned to versus which area it should be in.",
+    "Gi0/2 (facing the R&D subnet, 10.75.4.0/24) is configured for area 20 instead of area 40 following last night's VLAN cleanup — 'show ip ospf' confirms area 40 now has zero active interfaces on abr-hq01, so no Type-3 summary LSAs for R&D's real area are being generated."
+  ],
+  "solution": {
+    "root_cause": "Last night's VLAN cleanup on abr-hq01 accidentally reassigned interface Gi0/2 (facing the R&D lab subnet 10.75.4.0/24) from OSPF area 40 to area 20. Because area 40 now has no active interfaces on the ABR, no Type-3 summary LSAs for the R&D area are generated into the backbone, so area 20 (Sales) never learns a route to 10.75.4.0/24 and vice versa, even though both areas can still reach area 0 directly.",
+    "fix": "Reconfigure Gi0/2 on abr-hq01 back to OSPF area 40 so it correctly represents the R&D subnet as its own area, allowing abr-hq01 to generate proper Type-3 summary LSAs between area 40 and area 0 (and from there to area 20).",
+    "acceptable_answers": [
+      "from ospf area 40 to area 20",
+      "no active interfaces on the abr",
+      "type-3 summary lsas",
+      "wrong ospf area",
+      "gi0/2",
+      "area mismatch"
+    ]
+  }
+}

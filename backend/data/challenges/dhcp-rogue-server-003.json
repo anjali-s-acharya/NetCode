@@ -1,0 +1,74 @@
+{
+  "id": "dhcp-rogue-server-003",
+  "title": "Intermittent Wrong Gateway on the Engineering Lab VLAN",
+  "track": "DHCP",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Several (not all) laptops in the Engineering Lab (VLAN 120, 10.60.10.0/24) intermittently lose internet access and show a default gateway of 192.168.1.1 instead of the normal 10.60.10.1. Affected users say a reboot or 'ipconfig /renew' sometimes fixes it, sometimes makes it worse. Started yesterday afternoon; roughly 1 in 4 new connections are affected.",
+    "reportedBy": "Engineering Lab Manager",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "The Engineering Lab (VLAN 120, 10.60.10.0/24) is served by the corporate DHCP server dhcp-01 (10.1.1.5), which hands out gateway 10.60.10.1 and DNS 10.0.0.60. The lab has open, unmanaged access ports on switch sw-lab-01 that engineers frequently patch personal equipment into for testing. Port Gi1/0/14 was recently used by an engineer testing a consumer-grade travel router (TP-Link model, factory defaults) that was left plugged in and powered on overnight.",
+    "nodes": [
+      { "id": "client-lab", "label": "Lab Clients (VLAN 120, 10.60.10.0/24)", "type": "client" },
+      { "id": "sw-lab-01", "label": "sw-lab-01", "type": "switch" },
+      { "id": "dhcp-01", "label": "dhcp-01 (10.1.1.5, corporate DHCP)", "type": "dhcp-server" },
+      { "id": "rogue-router", "label": "Unknown device on Gi1/0/14 (rogue DHCP)", "type": "router" }
+    ],
+    "links": [
+      { "from": "client-lab", "to": "sw-lab-01", "label": "VLAN 120 access ports" },
+      { "from": "sw-lab-01", "to": "dhcp-01", "label": "ip helper-address 10.1.1.5" },
+      { "from": "sw-lab-01", "to": "rogue-router", "label": "Gi1/0/14, unmanaged, no port security" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "dhcp-01 service log",
+      "content": "14:02:11 DHCPDISCOVER from 8c:85:90:11:2b:3f via 10.60.10.1\n14:02:11 DHCPOFFER 10.60.10.44 to 8c:85:90:11:2b:3f\n14:02:11 DHCPREQUEST for 10.60.10.44 -- client did not respond, assuming offer from competing server accepted\n14:03:40 DHCPDISCOVER from 44:1c:a8:aa:90:12 via 10.60.10.1\n14:03:40 DHCPOFFER 10.60.10.51 to 44:1c:a8:aa:90:12\n14:03:41 DHCPREQUEST for 10.60.10.51 -- client did not respond, assuming offer from competing server accepted"
+    },
+    {
+      "source": "sw-lab-01 syslog",
+      "content": "Jul 13 14:00:52 %DHCP_SNOOPING-5-DHCP_SNOOPING_UNTRUSTED_PORT: DHCP packet (type OFFER) received from untrusted port GigabitEthernet1/0/14, source 192.168.1.1\nJul 13 14:02:14 %DHCP_SNOOPING-5-DHCP_SNOOPING_UNTRUSTED_PORT: DHCP packet (type OFFER) received from untrusted port GigabitEthernet1/0/14, source 192.168.1.1\nJul 13 14:03:42 %DHCP_SNOOPING-5-DHCP_SNOOPING_UNTRUSTED_PORT: DHCP packet (type OFFER) received from untrusted port GigabitEthernet1/0/14, source 192.168.1.1"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-lab-01",
+      "command": "show ip dhcp snooping",
+      "output": "Switch DHCP snooping is enabled\nDHCP snooping is configured on the following VLANs: (none)\nInsertion of option 82 is disabled\nInterface                Trusted   Rate limit (pps)\n-----------------------  -------   ----------------\nGigabitEthernet1/0/1     yes       unlimited\nGigabitEthernet1/0/14    no        unlimited\nNote: DHCP snooping enabled globally but not activated on VLAN 120 -- rogue offers are being logged, not blocked."
+    },
+    {
+      "device": "affected-laptop (sample)",
+      "command": "ipconfig /all",
+      "output": "Ethernet adapter Ethernet:\n   DHCP Server . . . . . . . . . . : 192.168.1.1\n   IPv4 Address. . . . . . . . . . : 192.168.1.105\n   Default Gateway . . . . . . . . : 192.168.1.1\n   DNS Servers . . . . . . . . . . : 192.168.1.1"
+    },
+    {
+      "device": "sw-lab-01",
+      "command": "show mac address-table interface Gi1/0/14",
+      "output": "Vlan    Mac Address       Type        Ports\n----    -----------       --------    -----\n120     b0:4e:26:aa:cc:01  DYNAMIC    Gi1/0/14\nNote: OUI b0:4e:26 registers to TP-Link Corporation."
+    }
+  ],
+  "monitoring": {
+    "metric": "dhcp_offer_source_diversity_vlan120",
+    "notes": "The DHCP offer-source monitor (fed from DHCP snooping logs) shows VLAN 120 normally sees 100% of offers sourced from 10.1.1.5. Starting yesterday at 13:58, roughly 20-25% of offers are being logged as sourced from 192.168.1.1 on port Gi1/0/14 -- a source address that isn't even in the 10.60.10.0/24 subnet, meaning any client that races that offer and wins gets an unusable gateway/DNS."
+  },
+  "hints": [
+    "Not every client is affected, and the ones that are get an IP outside the 10.60.10.0/24 range entirely -- that points to two DHCP servers racing, not a scope or relay problem.",
+    "Check the DHCP snooping / offer-source logs on sw-lab-01 for VLAN 120 to see where offers are actually coming from.",
+    "A consumer router (TP-Link OUI b0:4e:26) plugged into unmanaged port Gi1/0/14 is handing out its factory-default 192.168.1.0/24 addresses and racing the real DHCP server -- DHCP snooping is enabled globally on the switch but was never applied to VLAN 120, so the rogue offers aren't being blocked."
+  ],
+  "solution": {
+    "root_cause": "A consumer-grade router with factory-default settings (TP-Link, MAC OUI b0:4e:26) was plugged into unmanaged access port Gi1/0/14 on sw-lab-01 and is acting as a rogue DHCP server, handing out 192.168.1.0/24 addresses and gateway/DNS that are unreachable from the corporate network. It intermittently wins the DHCP race against the legitimate dhcp-01 (10.1.1.5) because DHCP snooping is enabled globally on the switch but was never activated on VLAN 120, so the untrusted port's offers aren't being filtered.",
+    "fix": "Disconnect the rogue device from Gi1/0/14, then enable DHCP snooping on VLAN 120 (ip dhcp snooping vlan 120) with only the uplink to dhcp-01 configured as a trusted port, so future rogue offers on access ports are dropped automatically.",
+    "acceptable_answers": [
+      "rogue dhcp",
+      "unauthorized dhcp server",
+      "dhcp snooping not enabled on vlan",
+      "192.168.1.1",
+      "tp-link",
+      "untrusted port offering dhcp"
+    ]
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "id": "switching-tcn-storm-006",
+  "title": "Network-Wide Micro-Outages Every Few Minutes Across Four Switches",
+  "track": "Switching",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "For the past two days, users across four different floors report brief (3-6 second) total connectivity drops that recur roughly every 4-7 minutes, affecting VoIP calls, RDP sessions, and file shares simultaneously across VLANs 10, 20, 30, and 40. The drops are too short and too widespread for anyone to reproduce reliably, and no single floor or switch is obviously the culprit — the on-call engineer's first two 'fixes' (rebooting sw-fl2-acc1 and sw-fl4-acc1, where users complained loudest) did not help.",
+    "reportedBy": "Multiple Floors / Escalated from Helpdesk",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "Four access switches (sw-fl1-acc1, sw-fl2-acc1, sw-fl3-acc1, sw-fl4-acc1) all uplink into core switch sw-core1 in a star topology, with sw-core1 as the STP root for all VLANs. A rarely-used conference room drop on sw-fl1-acc1 (Gi0/20) has an aging patch cable connecting to a wireless access point that has begun intermittently power-cycling due to a failing PoE injector, causing that single port to flap up/down every few minutes. Each flap generates an STP Topology Change Notification that propagates to sw-core1 and from there to every other access switch, triggering a MAC address table flush and brief flooding storm network-wide — even though the flapping port itself carries almost no user traffic and nobody has complained about that conference room.",
+    "nodes": [
+      { "id": "ap-conf1", "label": "Conference Room 1A AP (failing PoE)", "type": "client" },
+      { "id": "sw-fl1-acc1", "label": "sw-fl1-acc1", "type": "switch" },
+      { "id": "sw-fl2-acc1", "label": "sw-fl2-acc1", "type": "switch" },
+      { "id": "sw-fl3-acc1", "label": "sw-fl3-acc1", "type": "switch" },
+      { "id": "sw-fl4-acc1", "label": "sw-fl4-acc1", "type": "switch" },
+      { "id": "sw-core1", "label": "sw-core1 (STP root)", "type": "switch" }
+    ],
+    "links": [
+      { "from": "ap-conf1", "to": "sw-fl1-acc1", "label": "Gi0/20, flapping" },
+      { "from": "sw-fl1-acc1", "to": "sw-core1", "label": "uplink" },
+      { "from": "sw-fl2-acc1", "to": "sw-core1", "label": "uplink" },
+      { "from": "sw-fl3-acc1", "to": "sw-core1", "label": "uplink" },
+      { "from": "sw-fl4-acc1", "to": "sw-core1", "label": "uplink" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-fl1-acc1 syslog",
+      "content": "Jul 14 06:02:14 sw-fl1-acc1 %LINK-3-UPDOWN: Interface GigabitEthernet0/20, changed state to down\nJul 14 06:02:19 sw-fl1-acc1 %LINK-3-UPDOWN: Interface GigabitEthernet0/20, changed state to up\nJul 14 06:02:20 sw-fl1-acc1 %SPANTREE-5-TOPOTRAP: Topology Change Notification received on GigabitEthernet0/20 vlan 10\nJul 14 06:08:41 sw-fl1-acc1 %LINK-3-UPDOWN: Interface GigabitEthernet0/20, changed state to down\nJul 14 06:08:47 sw-fl1-acc1 %LINK-3-UPDOWN: Interface GigabitEthernet0/20, changed state to up\nJul 14 06:08:48 sw-fl1-acc1 %SPANTREE-5-TOPOTRAP: Topology Change Notification received on GigabitEthernet0/20 vlan 10"
+    },
+    {
+      "source": "sw-core1 syslog",
+      "content": "Jul 14 06:02:21 sw-core1 %SPANTREE-5-TOPOTRAP: Topology Change Notification received on port-channel1 (from sw-fl1-acc1) vlan 10\nJul 14 06:02:21 sw-core1 %SW_MATM-4-MACFLUSH: MAC address table flush triggered by topology change, vlan 10, forwarding to all VLANs sharing instance\nJul 14 06:08:49 sw-core1 %SPANTREE-5-TOPOTRAP: Topology Change Notification received on port-channel1 (from sw-fl1-acc1) vlan 10\nJul 14 06:08:49 sw-core1 %SW_MATM-4-MACFLUSH: MAC address table flush triggered by topology change, vlan 10, forwarding to all VLANs sharing instance"
+    },
+    {
+      "source": "sw-fl2-acc1 syslog",
+      "content": "Jul 14 06:02:22 sw-fl2-acc1 %SW_MATM-4-MACFLUSH: MAC address table flush triggered by topology change notification from root\nJul 14 06:08:50 sw-fl2-acc1 %SW_MATM-4-MACFLUSH: MAC address table flush triggered by topology change notification from root"
+    },
+    {
+      "source": "sw-fl4-acc1 syslog",
+      "content": "Jul 14 06:02:23 sw-fl4-acc1 %SW_MATM-4-MACFLUSH: MAC address table flush triggered by topology change notification from root\nJul 14 06:08:51 sw-fl4-acc1 %SW_MATM-4-MACFLUSH: MAC address table flush triggered by topology change notification from root"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-core1",
+      "command": "show spanning-tree vlan 10 detail | include Number of|Topology|from",
+      "output": "VLAN0010 is executing the rstp compatible Spanning Tree protocol\n  Number of topology changes 214 last change occurred 0:00:12 ago\n          from Port-channel1 (sw-fl1-acc1 uplink)"
+    },
+    {
+      "device": "sw-fl1-acc1",
+      "command": "show interfaces GigabitEthernet0/20 | include line protocol|last input|output",
+      "output": "GigabitEthernet0/20 is up, line protocol is up (connected)\n  last input 00:00:03, output 00:00:03, output hang never\n  Last clearing of \"show interface\" counters 3d02h\n  Note: interface flap count since last clear: 187"
+    },
+    {
+      "device": "sw-fl1-acc1",
+      "command": "show power inline GigabitEthernet0/20",
+      "output": "Interface  Admin  Oper       Power(Watts)  Device       Class\nGi0/20     auto   faulty     0.0           AP-conf1a    n/a\nNote: Errdisable recovery pending, PoE controller reports repeated overcurrent/undercurrent faults consistent with a failing PoE injector or AP power supply"
+    },
+    {
+      "device": "sw-fl2-acc1",
+      "command": "show spanning-tree vlan 10 detail | include Number of",
+      "output": "VLAN0010 is executing the rstp compatible Spanning Tree protocol\n  Number of topology changes 214 last change occurred 0:00:14 ago"
+    }
+  ],
+  "monitoring": {
+    "metric": "stp_topology_change_count_all_switches",
+    "notes": "Topology change counters on sw-core1, sw-fl2-acc1, sw-fl3-acc1, and sw-fl4-acc1 all increment in lockstep, every 4-7 minutes, always within 1-9 seconds of each other — indicating a single shared trigger propagating from the root rather than four independent problems. Cross-referencing exact timestamps shows sw-fl1-acc1's Gi0/20 flapping precisely 1-2 seconds before every network-wide topology change event, even though sw-fl1-acc1 was one of the two switches already rebooted (without effect) by the on-call engineer, and complaints were loudest on floors 2 and 4 which have no direct relationship to Gi0/20."
+  },
+  "hints": [
+    "The topology change counters increment in lockstep across all four switches within seconds of each other — this points to one shared upstream trigger via the STP root, not four separate local problems. Don't just look at the switches where users complain loudest.",
+    "Correlate exact timestamps of the topology change events on sw-core1 against interface up/down events on each access switch — one specific port is flapping right before every event, even though it isn't on the switches that were already rebooted.",
+    "GigabitEthernet0/20 on sw-fl1-acc1 (a conference room AP port) is flapping every few minutes due to a failing PoE injector, generating a Topology Change Notification each time that propagates through root switch sw-core1 and triggers a MAC address table flush and brief flooding storm on every other switch, including sw-fl2-acc1 and sw-fl4-acc1 where users actually notice it."
+  ],
+  "solution": {
+    "root_cause": "A failing PoE injector powering the conference room 1A access point causes GigabitEthernet0/20 on sw-fl1-acc1 to repeatedly power-cycle and flap up/down every 4-7 minutes. Each flap generates an STP Topology Change Notification that propagates to root switch sw-core1, which triggers a MAC address table flush and brief flooding/relearning storm across every other access switch in the topology, producing the network-wide micro-outages even though the flapping port itself is nearly idle and unrelated to the floors where the outage is most noticed.",
+    "fix": "Replace the failing PoE injector (or move the AP to a healthier PoE port) to stop Gi0/20 on sw-fl1-acc1 from flapping, and consider enabling STP PortFast on edge/AP ports so link flaps on them no longer generate topology change notifications that propagate network-wide.",
+    "acceptable_answers": [
+      "tcn storm",
+      "topology change notification",
+      "gi0/20 flapping",
+      "failing poe injector",
+      "mac address table flush",
+      "sw-fl1-acc1"
+    ]
+  }
+}

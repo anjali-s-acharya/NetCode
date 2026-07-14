@@ -1,0 +1,74 @@
+{
+  "id": "switching-native-vlan-005",
+  "title": "Odd Cross-VLAN Visibility Between Two Buildings After Trunk Re-Cable",
+  "track": "Switching",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "Since Monday's fiber patch panel maintenance between Building A and Building B, a handful of hosts in Building B's management VLAN (99, 10.99.0.0/24) are intermittently showing up in ARP tables and traffic captures on Building A's default VLAN (1), and two printers on VLAN 1 in Building A have become unreachable from their expected subnet while still being pingable from unexpected places. Most traffic between buildings is unaffected.",
+    "reportedBy": "Network Operations",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "Building A switch sw-bldga-core and Building B switch sw-bldgb-core are connected by a single 802.1Q trunk over fiber (Gi1/0/1 on each side), carrying VLANs 1, 10, 20, 30, and 99. The trunk was unplugged and re-terminated onto a new fiber pair during Monday's patch panel maintenance. sw-bldga-core uses the default native VLAN 1 on its trunk; sw-bldgb-core's trunk was previously configured (per site standard) with native VLAN 99 (management) to keep management traffic untagged for a legacy monitoring probe, but this was not carried over correctly when the port was reconfigured after the re-cable.",
+    "nodes": [
+      { "id": "sw-bldga-core", "label": "sw-bldga-core (native VLAN 1)", "type": "switch" },
+      { "id": "sw-bldgb-core", "label": "sw-bldgb-core (native VLAN 99)", "type": "switch" },
+      { "id": "printer-a", "label": "Printers (VLAN 1, Building A)", "type": "client" },
+      { "id": "mgmt-hosts-b", "label": "Management Hosts (VLAN 99, Building B)", "type": "client" }
+    ],
+    "links": [
+      { "from": "sw-bldga-core", "to": "sw-bldgb-core", "label": "Gi1/0/1 <-> Gi1/0/1, 802.1Q trunk, re-patched Monday" },
+      { "from": "printer-a", "to": "sw-bldga-core", "label": "access, VLAN 1" },
+      { "from": "mgmt-hosts-b", "to": "sw-bldgb-core", "label": "access, VLAN 99" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-bldga-core syslog",
+      "content": "Jul 13 09:05:12 sw-bldga-core %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on GigabitEthernet1/0/1 (1), with sw-bldgb-core GigabitEthernet1/0/1 (99).\nJul 13 09:05:44 sw-bldga-core %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on GigabitEthernet1/0/1 (1), with sw-bldgb-core GigabitEthernet1/0/1 (99)."
+    },
+    {
+      "source": "sw-bldgb-core syslog",
+      "content": "Jul 13 09:05:12 sw-bldgb-core %CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on GigabitEthernet1/0/1 (99), with sw-bldga-core GigabitEthernet1/0/1 (1).\nJul 13 09:06:01 sw-bldgb-core %SW_MATM-4-MACFLAP_NOTIF: Host 0022.44aa.11bb in vlan 1 is flapping between port Vlan1 and port Gi1/0/1"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-bldga-core",
+      "command": "show interfaces trunk",
+      "output": "Port        Mode         Encapsulation  Status        Native vlan\nGi1/0/1     on           802.1q         trunking      1\n\nPort        Vlans allowed on trunk\nGi1/0/1     1,10,20,30,99"
+    },
+    {
+      "device": "sw-bldgb-core",
+      "command": "show interfaces trunk",
+      "output": "Port        Mode         Encapsulation  Status        Native vlan\nGi1/0/1     on           802.1q         trunking      99\n\nPort        Vlans allowed on trunk\nGi1/0/1     1,10,20,30,99"
+    },
+    {
+      "device": "sw-bldga-core",
+      "command": "show mac address-table vlan 1 | include Gi1/0/1",
+      "output": "  1    0022.44aa.11bb    DYNAMIC     Gi1/0/1\n  1    0022.44bb.22cc    DYNAMIC     Gi1/0/1\nNote: both MACs registered belong to Building B management hosts (10.99.0.x), unexpectedly appearing in VLAN 1's table."
+    }
+  ],
+  "monitoring": {
+    "metric": "cdp_native_vlan_mismatch_count",
+    "notes": "CDP neighbor consistency check began flagging a native VLAN mismatch on the Building A <-> Building B trunk starting at 09:05 on Jul 13, immediately following the patch panel maintenance window (08:30-09:00). Since then, untagged frames sent by Building B management hosts (native VLAN 99 on that side) arrive at sw-bldga-core and are treated as VLAN 1 traffic (its native VLAN), explaining why those hosts' MACs and ARP entries leak into VLAN 1 and why two VLAN 1 printers became unreachable from their real subnet — their untagged replies are being placed onto VLAN 99 by sw-bldgb-core instead."
+  },
+  "hints": [
+    "Both switches log a CDP native VLAN mismatch warning on the inter-building trunk right after Monday's maintenance — start there rather than looking at individual VLAN configs in isolation.",
+    "Compare 'show interfaces trunk' native vlan value on sw-bldga-core against sw-bldgb-core for Gi1/0/1 — they don't agree, even though the allowed VLAN list matches on both.",
+    "sw-bldga-core's trunk uses the default native VLAN 1, while sw-bldgb-core's trunk uses native VLAN 99. Untagged frames cross the trunk and get placed into whichever VLAN is native on the receiving side, causing management VLAN traffic to leak into VLAN 1 and vice versa."
+  ],
+  "solution": {
+    "root_cause": "The inter-building trunk between sw-bldga-core and sw-bldgb-core has mismatched native VLANs: Gi1/0/1 on sw-bldga-core uses the default native VLAN 1, while Gi1/0/1 on sw-bldgb-core was left configured with native VLAN 99 after Monday's re-patch. Untagged (native) frames sent by hosts on one side's native VLAN get received and switched into the other side's native VLAN, causing VLAN 99 management hosts to leak into VLAN 1's MAC table and VLAN 1 printer traffic to leak into VLAN 99.",
+    "fix": "Set the native VLAN to match on both ends of the Gi1/0/1 trunk (standardize on VLAN 1, or move management traffic to a tagged VLAN 99 with a dedicated native VLAN like 999 on both switches) so untagged frames are no longer placed into the wrong VLAN.",
+    "acceptable_answers": [
+      "native vlan mismatch",
+      "native vlan 1",
+      "native vlan 99",
+      "untagged frames leaking",
+      "gi1/0/1 trunk",
+      "vlan leakage"
+    ]
+  }
+}

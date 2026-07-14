@@ -1,0 +1,74 @@
+{
+  "id": "switching-duplex-mismatch-003",
+  "title": "Backup Jobs to File Server Crawling and Timing Out",
+  "track": "Switching",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Nightly backup jobs from FILE-SRV02 to the backup appliance have been taking 6-8x longer than normal since Tuesday and several jobs are timing out before completion. The link shows as up/up and users doing small file transfers during the day don't notice anything, but any sustained transfer performs terribly.",
+    "reportedBy": "Backup/Storage Team",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "FILE-SRV02 connects directly to switch sw-dc-acc3 port Gi0/22 via a Cat6 patch cable. sw-dc-acc3 uplinks to the backup appliance's switch sw-dc-acc4 over the core. On Tuesday, the NIC on FILE-SRV02 was replaced after a hardware failure; the replacement NIC's driver defaults to a hardcoded 1000/full setting rather than auto-negotiate.",
+    "nodes": [
+      { "id": "file-srv02", "label": "FILE-SRV02", "type": "server" },
+      { "id": "sw-dc-acc3", "label": "sw-dc-acc3", "type": "switch" },
+      { "id": "sw-dc-acc4", "label": "sw-dc-acc4", "type": "switch" },
+      { "id": "backup-appliance", "label": "Backup Appliance (BKUP-01)", "type": "server" }
+    ],
+    "links": [
+      { "from": "file-srv02", "to": "sw-dc-acc3", "label": "Gi0/22, direct patch cable" },
+      { "from": "sw-dc-acc3", "to": "sw-dc-acc4", "label": "core uplink" },
+      { "from": "sw-dc-acc4", "to": "backup-appliance", "label": "Gi0/4" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-dc-acc3 syslog",
+      "content": "Jul 11 09:14:02 sw-dc-acc3 %LINK-3-UPDOWN: Interface GigabitEthernet0/22, changed state to up\nJul 11 09:14:03 sw-dc-acc3 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/22, changed state to up\nJul 11 09:14:03 sw-dc-acc3 %CDP-4-DUPLEX_MISMATCH: duplex mismatch discovered on GigabitEthernet0/22 (not full duplex), with FILE-SRV02 Ethernet0 (full duplex)"
+    },
+    {
+      "source": "backup job log (BKUP-01)",
+      "content": "2026-07-13 23:00:04 Starting backup job FILE-SRV02-nightly\n2026-07-13 23:00:04 Transfer rate: 3.2 MB/s (expected ~110 MB/s)\n2026-07-14 01:47:12 Job aborted: exceeded 3600s per-file timeout threshold"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-dc-acc3",
+      "command": "show interfaces GigabitEthernet0/22",
+      "output": "GigabitEthernet0/22 is up, line protocol is up\n  Hardware is Gigabit Ethernet, address is 001b.2a5c.0e16\n  MTU 1500 bytes\n  Full-duplex, Auto-speed, media type is 10/100/1000BaseTX\n  input flow-control is off, output flow-control is off\n  5 minute input rate 320000 bits/sec, 40 packets/sec\n  5 minute output rate 12000 bits/sec, 5 packets/sec\n     18402 packets input, 4021998 bytes\n     0 input errors, 0 CRC, 0 frame\n     11982 late collisions, 0 lost carrier\n     84119 packets output, 61829320 bytes\n     11982 late collisions, 3021 excessive collisions"
+    },
+    {
+      "device": "sw-dc-acc3",
+      "command": "show interfaces status | include Gi0/22",
+      "output": "Gi0/22   FILE-SRV02       connected    500        a-full  a-1000 10/100/1000BaseTX"
+    },
+    {
+      "device": "FILE-SRV02",
+      "command": "ethtool eth0",
+      "output": "Settings for eth0:\n\tSupported ports: [ TP ]\n\tSpeed: 1000Mb/s\n\tDuplex: Full\n\tAuto-negotiation: off\n\tLink detected: yes\n\tNote: NIC replaced 2026-07-11, driver config carried over from decommissioned card with duplex hardcoded to full"
+    }
+  ],
+  "monitoring": {
+    "metric": "interface_late_collisions_gi0_22",
+    "notes": "Interface error graph for sw-dc-acc3 Gi0/22 shows late collisions and excessive collision counters both flat at zero prior to 2026-07-11 09:14, then climbing steadily under any sustained load starting the moment the interface came back up after the NIC swap. CRC/runt counts on the switch side are elevated only when the port carries heavy backup traffic, consistent with a duplex mismatch rather than a bad cable."
+  },
+  "hints": [
+    "The link is up/up and light traffic (small file browsing) works fine — this points to a Layer 1 negotiation issue that only shows up under sustained load, not a routing or VLAN problem.",
+    "Check the interface error counters on sw-dc-acc3 Gi0/22 — late collisions and excessive collisions are a classic signature, and note the switch's own CDP duplex mismatch log message.",
+    "FILE-SRV02's replacement NIC is hardcoded to full duplex with auto-negotiation off, while sw-dc-acc3's Gi0/22 is auto-negotiating and falling back to half duplex, producing the mismatch."
+  ],
+  "solution": {
+    "root_cause": "The NIC replaced in FILE-SRV02 on July 11 has auto-negotiation disabled and is hardcoded to 1000/full duplex, while switch port Gi0/22 on sw-dc-acc3 is set to auto-negotiate and falls back to half duplex when it can't negotiate with the non-negotiating peer. This duplex mismatch produces late collisions under sustained traffic, severely degrading backup transfer throughput.",
+    "fix": "Set FILE-SRV02's NIC back to auto-negotiate (or explicitly configure both FILE-SRV02 and sw-dc-acc3 Gi0/22 to matching 1000/full settings) so both sides agree on duplex mode.",
+    "acceptable_answers": [
+      "duplex mismatch",
+      "late collisions",
+      "hardcoded full duplex",
+      "auto-negotiation off",
+      "gi0/22",
+      "half duplex fallback"
+    ]
+  }
+}

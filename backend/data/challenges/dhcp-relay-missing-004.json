@@ -1,0 +1,74 @@
+{
+  "id": "dhcp-relay-missing-004",
+  "title": "Brand-New Warehouse VLAN Gets No DHCP Addresses at All",
+  "track": "DHCP",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "IT stood up a new warehouse subnet (VLAN 220, 10.90.20.0/24) yesterday for handheld barcode scanners. None of the scanners can get an IP address -- they all sit at 'Acquiring network address' indefinitely. The scanners work fine when tested on other, existing VLANs. DHCP is centralized at the datacenter and this is a routed (L3) remote site.",
+    "reportedBy": "Warehouse Ops Supervisor",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "The warehouse site connects to the datacenter over a WAN link. Handheld scanners live on VLAN 220 (10.90.20.0/24), terminated on the warehouse L3 switch sw-wh-core. All DHCP for the company is centralized at dhcp-01 (10.1.1.5) in the datacenter -- there is no local DHCP server at the warehouse, so every VLAN's SVI must relay broadcast DHCP requests to dhcp-01 across the WAN. Other warehouse VLANs (e.g. VLAN 210, wired workstations) were configured months ago and work correctly.",
+    "nodes": [
+      { "id": "scanner", "label": "Handheld Scanners (VLAN 220, 10.90.20.0/24)", "type": "client" },
+      { "id": "sw-wh-core", "label": "sw-wh-core (L3 switch)", "type": "switch" },
+      { "id": "wan-router", "label": "wh-edge-rtr (WAN edge)", "type": "router" },
+      { "id": "dhcp-01", "label": "dhcp-01 (10.1.1.5, datacenter)", "type": "dhcp-server" }
+    ],
+    "links": [
+      { "from": "scanner", "to": "sw-wh-core", "label": "VLAN 220 access ports" },
+      { "from": "sw-wh-core", "to": "wan-router", "label": "routed uplink" },
+      { "from": "wan-router", "to": "dhcp-01", "label": "WAN to datacenter" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-wh-core syslog",
+      "content": "Jul 13 09:10:02 sw-wh-core: %DHCP-6-BROADCAST_DROPPED: Broadcast DHCPDISCOVER on Vlan220 dropped, no ip helper-address configured on interface Vlan220\nJul 13 09:10:19 sw-wh-core: %DHCP-6-BROADCAST_DROPPED: Broadcast DHCPDISCOVER on Vlan220 dropped, no ip helper-address configured on interface Vlan220\nJul 13 09:11:47 sw-wh-core: %DHCP-6-BROADCAST_DROPPED: Broadcast DHCPDISCOVER on Vlan220 dropped, no ip helper-address configured on interface Vlan220"
+    },
+    {
+      "source": "dhcp-01 service log",
+      "content": "09:00:00 -- 10:00:00: No DHCPDISCOVER packets received from relay agent 10.90.20.1 (VLAN 220 SVI) in the last hour\n09:00:00 -- 10:00:00: DHCPDISCOVER packets from relay agent 10.90.10.1 (VLAN 210 SVI): 34, all offers accepted"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-wh-core",
+      "command": "show running-config interface Vlan220",
+      "output": "interface Vlan220\n description Warehouse-Scanners\n ip address 10.90.20.1 255.255.255.0\n no ip helper-address\n ip pim sparse-mode"
+    },
+    {
+      "device": "sw-wh-core",
+      "command": "show running-config interface Vlan210",
+      "output": "interface Vlan210\n description Warehouse-Workstations\n ip address 10.90.10.1 255.255.255.0\n ip helper-address 10.1.1.5\n ip pim sparse-mode"
+    },
+    {
+      "device": "scanner-042",
+      "command": "show dhcp status",
+      "output": "Interface: wlan0\nState: DISCOVER (retry 9)\nLast offer received: never\nLease: none"
+    }
+  ],
+  "monitoring": {
+    "metric": "dhcp_relay_packets_by_vlan",
+    "notes": "The relay-agent dashboard on dhcp-01 shows steady DHCPDISCOVER volume from every existing warehouse VLAN's relay agent except one: VLAN 220's SVI (10.90.20.1) has sent exactly zero relayed packets since the VLAN was created yesterday at 08:45, even though the switch's local interface counters confirm scanners are broadcasting DHCPDISCOVER on that VLAN continuously."
+  },
+  "hints": [
+    "Compare the SVI configuration for the new VLAN 220 against a working warehouse VLAN like VLAN 210 -- what's different?",
+    "The switch syslog is explicitly telling you why DHCPDISCOVER broadcasts aren't going anywhere on Vlan220.",
+    "The Vlan220 SVI on sw-wh-core is missing 'ip helper-address 10.1.1.5' entirely, so DHCP broadcasts never leave the local VLAN and can never reach the centralized dhcp-01 across the WAN."
+  ],
+  "solution": {
+    "root_cause": "The Vlan220 SVI on sw-wh-core was created without an ip helper-address / DHCP relay pointing at the centralized DHCP server, unlike the working Vlan210 SVI which has ip helper-address 10.1.1.5 configured. DHCP is a broadcast protocol that doesn't route across L3 boundaries on its own, so scanner DHCPDISCOVER broadcasts are dropped locally and never reach dhcp-01.",
+    "fix": "Add 'ip helper-address 10.1.1.5' to the Vlan220 interface configuration on sw-wh-core so DHCP broadcasts are relayed as unicast to the datacenter DHCP server, matching the working VLAN 210 configuration.",
+    "acceptable_answers": [
+      "without an ip helper-address",
+      "ip helper-address",
+      "vlan220 svi",
+      "dropped locally",
+      "doesn't route across l3 boundaries",
+      "dhcp relay"
+    ]
+  }
+}

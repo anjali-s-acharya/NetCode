@@ -1,0 +1,77 @@
+{
+  "id": "switching-stp-priority-002",
+  "title": "Marketing Team Sees Intermittent Drops After 'Helpful' Switch Was Added",
+  "track": "Switching",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Since yesterday afternoon, the Marketing team on the 2nd floor reports intermittent connectivity drops lasting 30-60 seconds, several times an hour. A contractor mentioned plugging in a small unmanaged switch under a desk to add extra ports for a temporary event setup. IT did not authorize or configure this device.",
+    "reportedBy": "2nd Floor Marketing Team",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "The 2nd floor is served by two access switches, sw-fl2-acc1 and sw-fl2-acc2, both uplinked redundantly to core switch sw-core1 with Spanning Tree keeping one uplink forwarding and one blocking for loop prevention. sw-core1 was configured as the intended root bridge for VLAN 30 (Marketing, 10.30.0.0/24) with priority 4096. Yesterday, a contractor connected a small unmanaged desk switch between two wall jacks on sw-fl2-acc1, inadvertently creating a second physical path and re-triggering a root bridge election.",
+    "nodes": [
+      { "id": "mkt-clients", "label": "Marketing Clients (10.30.0.0/24)", "type": "client" },
+      { "id": "sw-fl2-acc1", "label": "sw-fl2-acc1", "type": "switch" },
+      { "id": "sw-fl2-acc2", "label": "sw-fl2-acc2", "type": "switch" },
+      { "id": "desk-switch", "label": "Unmanaged Desk Switch (unauthorized)", "type": "switch" },
+      { "id": "sw-core1", "label": "sw-core1 (intended root, VLAN 30)", "type": "switch" }
+    ],
+    "links": [
+      { "from": "mkt-clients", "to": "sw-fl2-acc1", "label": "access ports" },
+      { "from": "sw-fl2-acc1", "to": "sw-core1", "label": "Gi1/0/1 uplink" },
+      { "from": "sw-fl2-acc1", "to": "desk-switch", "label": "wall jack A" },
+      { "from": "sw-fl2-acc2", "to": "desk-switch", "label": "wall jack B (same room, looped via desk switch)" },
+      { "from": "sw-fl2-acc2", "to": "sw-core1", "label": "Gi1/0/1 uplink" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-fl2-acc1 syslog",
+      "content": "Jul 13 14:22:07 sw-fl2-acc1 %SPANTREE-2-ROOTCHANGE: Root Changed for vlan 30: New Root Port is Gi0/8, New Root is 0400.1122.3344\nJul 13 14:22:07 sw-fl2-acc1 %SPANTREE-2-ROOTGUARDBLOCK: not seen, root guard disabled on Gi0/8\nJul 13 14:22:09 sw-fl2-acc1 %SPANTREE-5-TOPOTRAP: Topology Change Notification received on Gi0/8 vlan 30"
+    },
+    {
+      "source": "sw-core1 syslog",
+      "content": "Jul 13 14:22:06 sw-core1 %SPANTREE-2-ROOTCHANGE: Root Changed for vlan 30: New Root Port is Gi1/0/12, New Root is 0400.1122.3344\nJul 13 14:22:06 sw-core1 %SPANTREE-6-PORTFWD: Port Gi1/0/12 instance 30 moving from blocking to forwarding\nJul 13 14:22:06 sw-core1 %SPANTREE-6-PORTFWD: Port Gi1/0/1 instance 30 moving from forwarding to blocking"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-core1",
+      "command": "show spanning-tree vlan 30",
+      "output": "VLAN0030\n  Spanning tree enabled protocol rstp\n  Root ID    Priority    4144\n             Address     0400.1122.3344\n             This bridge is NOT the root\n             Hello Time   2 sec  Max Age 20 sec  Forward Delay 15 sec\n\n  Bridge ID  Priority    4096  (priority 4096 sys-id-ext 30)\n             Address     58ac.78aa.0030\n\nInterface        Role Sts Cost      Prio.Nbr Type\n---------------- ---- --- --------- -------- ------------\nGi1/0/1          Altn BLK 4         128.1    P2p\nGi1/0/12         Root FWD 4         128.12   P2p"
+    },
+    {
+      "device": "sw-fl2-acc1",
+      "command": "show spanning-tree vlan 30",
+      "output": "VLAN0030\n  Spanning tree enabled protocol rstp\n  Root ID    Priority    4144\n             Address     0400.1122.3344\n             This bridge is NOT the root\n\nInterface        Role Sts Cost      Prio.Nbr Type\n---------------- ---- --- --------- -------- ------------\nGi0/8            Root FWD 4         128.8    P2p (to unmanaged desk switch)\nGi1/0/1          Altn BLK 4         128.1    P2p (to sw-core1, intended uplink)"
+    },
+    {
+      "device": "unauthorized device",
+      "command": "n/a - unmanaged switch, no CLI access",
+      "output": "Vendor: Genericom GS-108. No STP configuration possible; device forwards BPDUs with default bridge priority 32768 combined with a low-order MAC that computed bridge ID 4144, unintentionally winning root election over sw-core1's priority 4096 due to a secondary rogue bridge advertising priority 4144 detected upstream of it. Device has no management interface."
+    }
+  ],
+  "monitoring": {
+    "metric": "stp_root_bridge_id_vlan30",
+    "notes": "Dashboard shows the elected root bridge ID for VLAN 30 changed from sw-core1 (priority 4096) to bridge ID 4144 at 14:22 on Jul 13, exactly when Marketing reported the first drop. Ports flap between forwarding/blocking on sw-fl2-acc1 and sw-fl2-acc2 correlate with the outage windows reported by users."
+  },
+  "hints": [
+    "Check which switch is currently the STP root bridge for VLAN 30 — is it the one that's supposed to be root?",
+    "The root bridge ID changed at 14:22 on Jul 13, right when the intermittent drops started. Look at what got physically connected around that time.",
+    "The unauthorized device introduced a new path with a bridge priority that beat sw-core1's priority 4096, moving the root role away from the core and causing suboptimal forwarding/blocking transitions on the access switches."
+  ],
+  "solution": {
+    "root_cause": "An unauthorized unmanaged switch was connected between two wall jacks on the 2nd floor, creating an unintended path into the topology whose default bridge priority combination produced a lower bridge ID (4144) than sw-core1's configured priority of 4096. This caused an unplanned STP root election, moving the root role away from sw-core1 and causing repeated forwarding/blocking transitions on sw-fl2-acc1 and sw-fl2-acc2 as the topology stabilized.",
+    "fix": "Physically disconnect the unauthorized unmanaged switch, and enable BPDU Guard / Root Guard on access ports on sw-fl2-acc1 and sw-fl2-acc2 to prevent unauthorized devices from participating in or winning future root elections.",
+    "acceptable_answers": [
+      "unauthorized switch",
+      "unmanaged switch",
+      "rogue root bridge",
+      "root bridge changed",
+      "won root election",
+      "priority 4096"
+    ]
+  }
+}

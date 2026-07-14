@@ -1,0 +1,80 @@
+{
+  "id": "dns-stale-client-config-002",
+  "title": "One Laptop Can't Resolve Internal Hostnames",
+  "track": "DNS",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "User Priya Nair reports her laptop (PRIYA-LT) cannot reach wiki.corp.local or any other *.corp.local site, showing 'DNS_PROBE_FINISHED_NXDOMAIN' in Chrome. Public sites like google.com load normally. Coworkers sitting at nearby desks on the same subnet have no issues. Priya's laptop was out for repair last month and just came back from IT depot.",
+    "reportedBy": "Priya Nair (Marketing)",
+    "priority": "Low"
+  },
+  "topology": {
+    "description": "The Marketing floor subnet (10.30.2.0/24) is served by DHCP scope dhcp-mktg which hands out dns-corp-01 (10.0.0.60) and dns-corp-02 (10.0.0.61) as DNS servers to all clients. PRIYA-LT sits on this same subnet but was reimaged at the IT depot with an old imaging profile that hardcodes a static DNS server, dns-legacy-01 (10.0.0.15), which was decommissioned six months ago.",
+    "nodes": [
+      { "id": "priya-lt", "label": "PRIYA-LT (10.30.2.87)", "type": "client" },
+      { "id": "client-mktg", "label": "Other Marketing Clients (10.30.2.0/24)", "type": "client" },
+      { "id": "dhcp-mktg", "label": "DHCP Scope dhcp-mktg", "type": "dhcp-server" },
+      { "id": "dns-corp-01", "label": "dns-corp-01 (10.0.0.60)", "type": "dns-server" },
+      { "id": "dns-legacy-01", "label": "dns-legacy-01 (10.0.0.15, decommissioned)", "type": "dns-server" }
+    ],
+    "links": [
+      { "from": "client-mktg", "to": "dhcp-mktg", "label": "DHCP-assigned DNS: 10.0.0.60, 10.0.0.61" },
+      { "from": "client-mktg", "to": "dns-corp-01", "label": "resolves via" },
+      { "from": "priya-lt", "to": "dns-legacy-01", "label": "hardcoded static DNS (unreachable)" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "PRIYA-LT DNS client log",
+      "content": "09:14:02 Query wiki.corp.local sent to 10.0.0.15\n09:14:07 Query wiki.corp.local timed out (no response from 10.0.0.15)\n09:14:07 Query wiki.corp.local retried, server 10.0.0.15\n09:14:12 Query wiki.corp.local timed out (no response from 10.0.0.15)\n09:14:12 Resolution failed: NXDOMAIN returned to application"
+    },
+    {
+      "source": "dns-corp-01 query log",
+      "content": "09:14:02 No queries received from 10.30.2.87 in the last 24h"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "PRIYA-LT",
+      "command": "ipconfig /all | findstr /C:\"DNS Servers\" /C:\"DHCP Enabled\"",
+      "output": "DHCP Enabled. . . . . . . . . . . : Yes\nDNS Servers . . . . . . . . . . . : 10.0.0.15"
+    },
+    {
+      "device": "PRIYA-LT",
+      "command": "netsh interface ipv4 show dnsservers",
+      "output": "Configuration for interface \"Ethernet\"\n    Statically Configured DNS Servers:  10.0.0.15\n    Register with which suffix:         Primary only"
+    },
+    {
+      "device": "coworker-lt (control, same subnet)",
+      "command": "ipconfig /all | findstr /C:\"DNS Servers\" /C:\"DHCP Enabled\"",
+      "output": "DHCP Enabled. . . . . . . . . . . : Yes\nDNS Servers . . . . . . . . . . . : 10.0.0.60\n                                     10.0.0.61"
+    },
+    {
+      "device": "dhcp-mktg",
+      "command": "show scope 10.30.2.0/24 options",
+      "output": "Option 006 (DNS Servers): 10.0.0.60, 10.0.0.61\nLease for 10.30.2.87 (PRIYA-LT): active, options honored at lease time"
+    }
+  ],
+  "monitoring": {
+    "metric": "dns_query_volume_per_client",
+    "notes": "The per-client query dashboard on dns-corp-01/02 shows zero queries from 10.30.2.87 (PRIYA-LT) going back 24 hours, while every other host in 10.30.2.0/24 shows a normal steady query rate. dns-legacy-01 (10.0.0.15) has been fully offline and unmonitored since it was decommissioned 6 months ago, so nothing is capturing PRIYA-LT's failed queries server-side at all."
+  },
+  "hints": [
+    "Check whether PRIYA-LT is actually using the DNS servers the DHCP scope hands out, or something else.",
+    "Compare ipconfig /all DNS Servers output between PRIYA-LT and a working coworker on the same subnet.",
+    "PRIYA-LT has a static DNS entry of 10.0.0.15 hardcoded (likely from the IT depot's reimage), pointing at a DNS server that was decommissioned months ago -- it should be set to obtain DNS automatically like every other machine."
+  ],
+  "solution": {
+    "root_cause": "PRIYA-LT was reimaged with a stale IT depot profile that statically configures DNS to 10.0.0.15 (dns-legacy-01), a server decommissioned six months ago, instead of obtaining DNS automatically via DHCP like the rest of the subnet. Every DNS query from the laptop times out against the dead server.",
+    "fix": "Set the network adapter on PRIYA-LT to 'Obtain DNS server address automatically' (remove the static 10.0.0.15 entry) so it picks up dns-corp-01/dns-corp-02 (10.0.0.60/10.0.0.61) from DHCP, then flush the local DNS cache and re-test.",
+    "acceptable_answers": [
+      "static dns",
+      "hardcoded dns",
+      "10.0.0.15",
+      "stale dns config",
+      "manually configured dns server",
+      "obtain dns automatically"
+    ]
+  }
+}

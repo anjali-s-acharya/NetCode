@@ -1,0 +1,81 @@
+{
+  "id": "routing-summarization-blackhole-005",
+  "title": "One Subnet Unreachable Behind a Healthy-Looking Route Summary",
+  "track": "Routing",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "Monitoring for the finance app server at 10.30.14.22 (subnet 10.30.14.0/24) has been alerting 'host unreachable' since yesterday afternoon, but every other subnet in the 10.30.0.0/16 range (used by regional distribution router dist-rtr03) is working normally. Traceroutes from the core toward 10.30.14.22 die at dist-rtr03 with no further hops.",
+    "reportedBy": "Finance Systems Team",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "dist-rtr03 aggregates eight /24 subnets (10.30.8.0/24 through 10.30.15.0/24) for the west campus and advertises them into the OSPF backbone as a single summarized route, 10.30.8.0/21, to keep the core routing table small. Each /24 is normally connected to one of dist-rtr03's downstream access switches. Two weeks ago, subnet 10.30.14.0/24 (finance servers) was physically re-homed to a different distribution router, dist-rtr07, as part of a rack consolidation, but the summarization on dist-rtr03 was never updated, so dist-rtr03 still advertises 10.30.14.0/24 as part of its summary even though it no longer has a real path to it.",
+    "nodes": [
+      { "id": "core-rtr01", "label": "core-rtr01 (OSPF backbone, area 0)", "type": "router" },
+      { "id": "dist-rtr03", "label": "dist-rtr03 (west campus, advertises 10.30.8.0/21 summary)", "type": "router" },
+      { "id": "dist-rtr07", "label": "dist-rtr07 (new home of 10.30.14.0/24)", "type": "router" },
+      { "id": "finance-server", "label": "Finance App Server (10.30.14.22)", "type": "server" },
+      { "id": "other-subnets", "label": "Other West Campus Subnets (10.30.8-13,15.0/24)", "type": "server" }
+    ],
+    "links": [
+      { "from": "core-rtr01", "to": "dist-rtr03", "label": "OSPF area 0, receives summarized 10.30.8.0/21" },
+      { "from": "dist-rtr03", "to": "other-subnets", "label": "still directly connected, working" },
+      { "from": "dist-rtr07", "to": "finance-server", "label": "actual current path (post rack consolidation)" },
+      { "from": "core-rtr01", "to": "dist-rtr07", "label": "OSPF area 0, no route advertised for 10.30.14.0/24 yet" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "core-rtr01 syslog",
+      "content": "Jul 13 14:20:11 core-rtr01 %ICMP-3-UNREACH: destination unreachable, host 10.30.14.22 via 10.30.8.253 (dist-rtr03)\nJul 13 14:20:11 core-rtr01 route-lookup: 10.30.14.22 matched summary 10.30.8.0/21 via dist-rtr03 (most specific match available in backbone table)"
+    },
+    {
+      "source": "dist-rtr03 syslog",
+      "content": "Jul 13 14:20:11 dist-rtr03 %IP-3-NOROUTE: no route to host 10.30.14.22, discarding\nJun 30 09:44:02 dist-rtr03 %LINK-3-UPDOWN: Interface Vlan14 (10.30.14.0/24), changed state to administratively down (rack consolidation - moved to dist-rtr07 per CHG0041882)"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "dist-rtr03",
+      "command": "show ip route 10.30.14.0",
+      "output": "% Network not in table"
+    },
+    {
+      "device": "dist-rtr03",
+      "command": "show running-config | section router ospf",
+      "output": "router ospf 1\n area 0 range 10.30.8.0 255.255.248.0\n network 10.30.8.0 0.0.0.255 area 0\n network 10.30.9.0 0.0.0.255 area 0\n network 10.30.10.0 0.0.0.255 area 0\n network 10.30.11.0 0.0.0.255 area 0\n network 10.30.12.0 0.0.0.255 area 0\n network 10.30.13.0 0.0.0.255 area 0\n network 10.30.15.0 0.0.0.255 area 0\n! note: 10.30.14.0/24 no longer advertised here directly, but area range summary below still covers it"
+    },
+    {
+      "device": "core-rtr01",
+      "command": "show ip route 10.30.14.22",
+      "output": "Routing entry for 10.30.8.0/21\n  Known via \"ospf 1\", distance 110, metric 20, type inter area\n  Last update from 10.30.8.253 on Gi0/1, 00:14:22 ago\n  Routing Descriptor Blocks:\n  * 10.30.8.253, from 10.30.8.253, via GigabitEthernet0/1"
+    },
+    {
+      "device": "dist-rtr07",
+      "command": "show ip route 10.30.14.0",
+      "output": "C    10.30.14.0/24 is directly connected, Vlan14\n     (locally connected, not yet advertised into OSPF area 0 - network statement missing)"
+    }
+  ],
+  "monitoring": {
+    "metric": "west_campus_subnet_reachability",
+    "notes": "Synthetic reachability checks show 10.30.14.0/24 (finance) dropped to 0% reachability at 2026-06-30 09:44, exactly when the Vlan14 interface on dist-rtr03 was administratively shut down for the rack move — but the alert was suppressed at the time as 'planned maintenance' and never re-verified after the move completed. All seven other /24s under the 10.30.8.0/21 summary have shown 100% reachability the entire time, which is why this went unnoticed for two weeks: the aggregate summary route looked completely healthy."
+  },
+  "hints": [
+    "Every other subnet under dist-rtr03's summary works fine — the problem is specific to one /24, which suggests the issue is inside the summary boundary, not with OSPF adjacency or the backbone itself.",
+    "Check whether dist-rtr03 still has a real, directly connected route for 10.30.14.0/24, separate from the area range summary it advertises.",
+    "dist-rtr03's area 0 range 10.30.8.0/21 summary still includes 10.30.14.0/24, but Vlan14 was shut down there on 2026-06-30 when the subnet moved to dist-rtr07 — and dist-rtr07 has the subnet connected locally but never added it to an OSPF network statement, so no router in the backbone has a real path to it."
+  ],
+  "solution": {
+    "root_cause": "Subnet 10.30.14.0/24 was physically moved from dist-rtr03 to dist-rtr07 during a rack consolidation, but dist-rtr03's OSPF area 0 range summary (10.30.8.0/21) still covers that subnet even though it no longer has a real route to it, and dist-rtr07 never added 10.30.14.0/24 to an OSPF network statement to advertise it. The result is a routing black hole: the backbone still matches 10.30.14.22 to the summary via dist-rtr03, which silently discards the traffic.",
+    "fix": "Add the 10.30.14.0/24 network statement to OSPF on dist-rtr07 so it's actually advertised into area 0, and verify dist-rtr03's area range no longer misleadingly summarizes a subnet it doesn't own (or narrow the range if other subnets still legitimately belong to it).",
+    "acceptable_answers": [
+      "routing black hole",
+      "moved from dist-rtr03 to dist-rtr07",
+      "an ospf network statement",
+      "silently discards the traffic",
+      "summary via dist-rtr03",
+      "missing network statement"
+    ]
+  }
+}

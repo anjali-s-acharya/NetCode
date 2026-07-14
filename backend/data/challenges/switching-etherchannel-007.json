@@ -1,0 +1,79 @@
+{
+  "id": "switching-etherchannel-007",
+  "title": "Database Cluster Sync Traffic Dropping Packets Under Load, No Hard Failure",
+  "track": "Switching",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "The 4x1G LACP EtherChannel between sw-dc-dist1 and sw-dc-dist2, which carries database replication traffic between two data center pods, has been fine at idle but shows intermittent packet loss (0.5-2%) and replication lag spikes whenever traffic crosses roughly 2.2 Gbps of aggregate throughput — well under the nominal 4 Gbps bundle capacity. Both switches show the port-channel interface as up. No alerts fired because nothing is administratively down.",
+    "reportedBy": "Database Platform Team",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "sw-dc-dist1 and sw-dc-dist2 are connected by four physical links (Gi0/1-Gi0/4 on both switches) bundled into Port-channel1 using LACP, intended to provide 4 Gbps of aggregate bandwidth for inter-pod database replication (VLAN 500) plus general inter-pod traffic (VLANs 100-104). One member port was touched during an unrelated maintenance change last week when an engineer manually re-applied config to Gi0/3 on sw-dc-dist2 and only partially copied the trunk allowed-VLAN list, omitting VLAN 500 from that one port's allowed list while leaving its LACP mode correct. The port still joins the LACP bundle (LACP negotiation only concerns speed/duplex/mode, not VLAN config), so 'show etherchannel summary' looks healthy, but VLAN 500 traffic hashed onto that member is silently dropped, and load-balancing hashes only a portion of flows onto Gi0/3, which is why the problem only appears under load and looks like generic congestion rather than a hard failure.",
+    "nodes": [
+      { "id": "db-pod-a", "label": "DB Pod A Cluster Nodes", "type": "server" },
+      { "id": "sw-dc-dist1", "label": "sw-dc-dist1", "type": "switch" },
+      { "id": "sw-dc-dist2", "label": "sw-dc-dist2", "type": "switch" },
+      { "id": "db-pod-b", "label": "DB Pod B Cluster Nodes", "type": "server" }
+    ],
+    "links": [
+      { "from": "db-pod-a", "to": "sw-dc-dist1", "label": "VLAN 500 replication + VLAN 100-104" },
+      { "from": "sw-dc-dist1", "to": "sw-dc-dist2", "label": "Port-channel1, Gi0/1-Gi0/4, LACP" },
+      { "from": "sw-dc-dist2", "to": "db-pod-b", "label": "VLAN 500 replication + VLAN 100-104" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-dc-dist2 syslog",
+      "content": "Jul 08 14:12:03 sw-dc-dist2 %PARSER-5-CFGLOG_LOGGEDCMD: user engr_jchen logged command: interface GigabitEthernet0/3\nJul 08 14:12:03 sw-dc-dist2 %PARSER-5-CFGLOG_LOGGEDCMD: user engr_jchen logged command: switchport trunk allowed vlan 100,101,102,103,104\nJul 08 14:12:03 sw-dc-dist2 %PARSER-5-CFGLOG_LOGGEDCMD: user engr_jchen logged command: channel-group 1 mode active"
+    },
+    {
+      "source": "db cluster replication log (db-pod-b node1)",
+      "content": "2026-07-14 11:02:17 WARN replication lag increasing: 340ms (baseline 12ms)\n2026-07-14 11:02:19 WARN packet retransmit rate elevated on sync channel to pod-a\n2026-07-14 11:03:01 INFO throughput on sync channel: 2.3 Gbps aggregate"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-dc-dist1",
+      "command": "show etherchannel summary",
+      "output": "Flags:  D - down        P - bundled in port-channel\n        I - stand-alone s - suspended\nGroup  Port-channel  Protocol    Ports\n------+-------------+-----------+-----------------------------------------------\n1      Po1(SU)       LACP        Gi0/1(P) Gi0/2(P) Gi0/3(P) Gi0/4(P)"
+    },
+    {
+      "device": "sw-dc-dist2",
+      "command": "show etherchannel summary",
+      "output": "Flags:  D - down        P - bundled in port-channel\n        I - stand-alone s - suspended\nGroup  Port-channel  Protocol    Ports\n------+-------------+-----------+-----------------------------------------------\n1      Po1(SU)       LACP        Gi0/1(P) Gi0/2(P) Gi0/3(P) Gi0/4(P)"
+    },
+    {
+      "device": "sw-dc-dist1",
+      "command": "show interfaces trunk",
+      "output": "Port        Mode   Encapsulation  Status      Native vlan\nGi0/1       active 802.1q         trunking    1\nGi0/2       active 802.1q         trunking    1\nGi0/3       active 802.1q         trunking    1\nGi0/4       active 802.1q         trunking    1\n\nPort        Vlans allowed on trunk\nGi0/1       100-104,500\nGi0/2       100-104,500\nGi0/3       100-104,500\nGi0/4       100-104,500"
+    },
+    {
+      "device": "sw-dc-dist2",
+      "command": "show interfaces trunk",
+      "output": "Port        Mode   Encapsulation  Status      Native vlan\nGi0/1       active 802.1q         trunking    1\nGi0/2       active 802.1q         trunking    1\nGi0/3       active 802.1q         trunking    1\nGi0/4       active 802.1q         trunking    1\n\nPort        Vlans allowed on trunk\nGi0/1       100-104,500\nGi0/2       100-104,500\nGi0/3       100-104,500\nGi0/4       100-104,500\n\nWARNING: Po1 member VLAN consistency check\n  Gi0/3: allowed vlans 100-104 -- MISSING vlan 500 compared to other bundle members"
+    }
+  ],
+  "monitoring": {
+    "metric": "etherchannel_member_link_utilization_po1",
+    "notes": "Per-member interface utilization on Port-channel1 shows Gi0/1, Gi0/2, and Gi0/4 carrying a healthy, evenly hashed mix of all VLANs including 500, while Gi0/3 carries zero VLAN 500 traffic despite being an active bundle member and receiving its expected ~25% share of VLAN 100-104 traffic. VLAN 500 flows that hash onto Gi0/3 (roughly a quarter of replication sessions, based on the src/dst IP+port hash) are dropped at egress on sw-dc-dist2, matching the 0.5-2% loss rate the DB team sees only once total link utilization is high enough that traffic is spread across all four members instead of concentrating on the first two or three by chance."
+  },
+  "hints": [
+    "The port-channel interface and 'show etherchannel summary' look completely healthy on both switches — the LACP bundle itself isn't the problem, so look one layer deeper at what's actually configured on each individual bundled port.",
+    "Compare 'show interfaces trunk' allowed-VLAN lists per member port between sw-dc-dist1 and sw-dc-dist2 rather than just checking that the bundle is up — LACP negotiation doesn't validate that VLAN configuration matches across members.",
+    "Gi0/3 on sw-dc-dist2 is missing VLAN 500 from its trunk allowed-VLAN list (introduced by an incomplete config copy during last week's maintenance), so any replication traffic the LACP hash sends over that specific member is silently dropped, which only becomes visible once load is high enough to spread flows across all four links."
+  ],
+  "solution": {
+    "root_cause": "During maintenance on July 8, the trunk allowed-VLAN list was reapplied to Gi0/3 on sw-dc-dist2 without including VLAN 500 (the database replication VLAN), while the other three EtherChannel members (Gi0/1, Gi0/2, Gi0/4) still allow it. LACP mode/negotiation is unaffected, so Gi0/3 still joins Port-channel1 and 'show etherchannel summary' reports the bundle as fully healthy, but any replication flow that the load-balancing hash assigns to Gi0/3 is silently dropped at that port, causing packet loss that only appears once traffic volume is high enough to spread across all four member links.",
+    "fix": "Add VLAN 500 back to the trunk allowed-VLAN list on Gi0/3 of sw-dc-dist2 so it matches the other three EtherChannel members (100-104,500).",
+    "acceptable_answers": [
+      "trunk allowed-vlan list",
+      "without including vlan 500",
+      "silently dropped at that port",
+      "bundle as fully healthy",
+      "database replication vlan",
+      "gi0/3"
+    ]
+  }
+}

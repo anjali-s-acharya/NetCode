@@ -1,0 +1,78 @@
+{
+  "id": "dhcp-failover-split-scope-006",
+  "title": "Random IP Conflicts Plaguing the Finance Floor",
+  "track": "DHCP",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "Over the past week, users on the Finance floor (VLAN 80, 10.40.8.0/23) have hit 'Windows detected an IP address conflict' popups roughly a dozen times, always for different machines, at unpredictable times. Affected users lose network access until they renew, and it sometimes recurs on the same machine days later. No pattern by device type, switch port, or time of day has been found. Two DHCP servers (dhcp-01 and dhcp-02) are configured redundantly for this subnet and have been in production for over a year without issue until last week's maintenance window.",
+    "reportedBy": "Finance Floor IT Liaison",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "VLAN 80 (10.40.8.0/23, usable range 10.40.8.10-10.40.9.250) is served by two DHCP servers configured as a split-scope pair for redundancy: dhcp-01 (10.1.1.5) is intended to own the lower 80% of the range and dhcp-02 (10.1.1.6) the upper 20%, per the original design from last year. The two servers do not use vendor DHCP failover replication (no shared lease database) -- redundancy is achieved purely by each server being configured with a non-overlapping address range (a manual split-scope). Both relay through ip helper-address entries on the VLAN 80 SVI pointing to both servers.",
+    "nodes": [
+      { "id": "client-fin", "label": "Finance Clients (VLAN 80, 10.40.8.0/23)", "type": "client" },
+      { "id": "sw-fin-core", "label": "sw-fin-core (L3 SVI)", "type": "switch" },
+      { "id": "dhcp-01", "label": "dhcp-01 (10.1.1.5)", "type": "dhcp-server" },
+      { "id": "dhcp-02", "label": "dhcp-02 (10.1.1.6)", "type": "dhcp-server" }
+    ],
+    "links": [
+      { "from": "client-fin", "to": "sw-fin-core", "label": "VLAN 80 access ports" },
+      { "from": "sw-fin-core", "to": "dhcp-01", "label": "ip helper-address 10.1.1.5" },
+      { "from": "sw-fin-core", "to": "dhcp-02", "label": "ip helper-address 10.1.1.6" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "dhcp-01 service log",
+      "content": "Jul 08 03:12:04 CONFIG RELOAD: scope 10.40.8.0/23 range updated by admin 'j.arnett' via console\nJul 08 03:12:04   old range: 10.40.8.10 - 10.40.9.30\nJul 08 03:12:04   new range: 10.40.8.10 - 10.40.9.90\nJul 08 03:12:04 CHANGE COMMENT: 'expanding pool ahead of Q3 headcount growth, ticket INFRA-2290'"
+    },
+    {
+      "source": "dhcp-02 service log",
+      "content": "Jul 01 11:00:00 scope 10.40.8.0/23 range: 10.40.9.31 - 10.40.9.250 (unchanged, no maintenance this window)"
+    },
+    {
+      "source": "client conflict events (aggregated, Windows Event ID 4198)",
+      "content": "Jul 10 09:14 host FIN-LT-0231: address conflict on 10.40.9.61, conflicting MAC 44:d3:ca:0a:5e:71\nJul 11 14:02 host FIN-LT-0198: address conflict on 10.40.9.45, conflicting MAC 9c:b6:54:11:2f:03\nJul 12 08:47 host FIN-LT-0344: address conflict on 10.40.9.72, conflicting MAC 00:1a:2b:88:cd:19\nJul 13 16:20 host FIN-LT-0112: address conflict on 10.40.9.38, conflicting MAC f4:5c:89:00:11:a2"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "dhcp-01",
+      "command": "show scope 10.40.8.0/23 range",
+      "output": "Scope: 10.40.8.0/23 (Finance-VLAN80)\nConfigured range: 10.40.8.10 - 10.40.9.90\nLast modified: 2026-07-08 03:12:04 by j.arnett (INFRA-2290)\nFailover partner: none configured (standalone / manual split-scope)"
+    },
+    {
+      "device": "dhcp-02",
+      "command": "show scope 10.40.8.0/23 range",
+      "output": "Scope: 10.40.8.0/23 (Finance-VLAN80)\nConfigured range: 10.40.9.31 - 10.40.9.250\nLast modified: 2025-06-02 (initial deployment)\nFailover partner: none configured (standalone / manual split-scope)"
+    },
+    {
+      "device": "dhcp-01",
+      "command": "show scope 10.40.8.0/23 conflicts",
+      "output": "Conflict detection: enabled (ping before offer)\nConflicts logged (last 7 days): 4\n  10.40.9.61 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)\n  10.40.9.45 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)\n  10.40.9.72 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)\n  10.40.9.38 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)"
+    }
+  ],
+  "monitoring": {
+    "metric": "dhcp_scope_overlap_incidents",
+    "notes": "The address-conflict dashboard shows zero conflicts on VLAN 80 for the prior 11 months, then a cluster of 4 conflicts starting Jul 10, two days after dhcp-01's range was expanded on Jul 08 (INFRA-2290). Every conflicting address logged so far falls between 10.40.9.31 and 10.40.9.90 -- the newly-overlapping portion of dhcp-01's expanded range that intrudes into dhcp-02's original 10.40.9.31-10.40.9.250 range. Addresses below 10.40.9.31 and above 10.40.9.90 have had zero conflicts."
+  },
+  "hints": [
+    "This is a two-DHCP-server subnet with no obvious single failure -- compare what each server thinks its own address range is, not just whether each server individually looks healthy.",
+    "Look at when the conflicts started relative to any recent DHCP configuration change, and which specific addresses are affected versus which are conflict-free.",
+    "The Jul 08 change (INFRA-2290) expanded dhcp-01's range from 10.40.8.10-10.40.9.30 to 10.40.8.10-10.40.9.90, which now overlaps dhcp-02's untouched range of 10.40.9.31-10.40.9.250 in the 10.40.9.31-10.40.9.90 band -- both servers can now independently lease the same addresses to different clients since there's no shared lease database (no real DHCP failover) to prevent it."
+  ],
+  "solution": {
+    "root_cause": "A Jul 8 maintenance change (INFRA-2290) expanded dhcp-01's split-scope range from 10.40.8.10-10.40.9.30 to 10.40.8.10-10.40.9.90 without correspondingly shrinking dhcp-02's range (still 10.40.9.31-10.40.9.250), creating an overlapping band of 10.40.9.31-10.40.9.90 that both servers can independently lease from. Because the two servers use a manual split-scope with no real DHCP failover replication (no shared lease database), each is unaware of leases the other hands out in the overlap, causing intermittent duplicate-address conflicts for clients landing in that band.",
+    "fix": "Shrink dhcp-01's range back to end below dhcp-02's start (e.g. 10.40.8.10-10.40.9.30) to eliminate the overlap, or migrate the pair to true DHCP failover (shared lease state) instead of a manually split, non-overlapping range; then release/renew affected clients in the former overlap band.",
+    "acceptable_answers": [
+      "overlapping band",
+      "manual split-scope",
+      "no real dhcp failover",
+      "shared lease database",
+      "duplicate-address conflicts",
+      "range overlap"
+    ]
+  }
+}

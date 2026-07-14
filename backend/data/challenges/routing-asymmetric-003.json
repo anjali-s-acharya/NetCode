@@ -1,0 +1,79 @@
+{
+  "id": "routing-asymmetric-003",
+  "title": "One-Way Traffic Between Site A and Site B",
+  "track": "Routing",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Application team reports that a new backend service at Site B (10.50.0.0/24) can be reached from Site A (10.10.0.0/24) for the TCP handshake, but the connection then hangs and eventually times out. Curl from Site A to the Site B service returns 'Connection timed out' about 50% of the time; ping between the two sites' hosts is also intermittently failing. This started after Site B's new firewall (fw-siteb-01) was put into service yesterday.",
+    "reportedBy": "Application Team Lead",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "Site A hosts (10.10.0.0/24) reach Site B hosts (10.50.0.0/24) over a WAN backbone through two core routers: core-a1 at Site A and core-b1 at Site B, with a stateful firewall fw-siteb-01 sitting in front of the Site B server subnet. core-b1 has two equal-cost-looking paths back toward Site A: a direct WAN link to core-a1, and a secondary link via a legacy router core-b2 that is only meant to be used as a backup. A static route added on core-b1 last week for a different purpose is unintentionally preferred for return traffic to 10.10.0.0/24, sending return traffic via core-b2, which bypasses fw-siteb-01's stateful session table.",
+    "nodes": [
+      { "id": "host-a", "label": "Site A Host (10.10.0.15)", "type": "client" },
+      { "id": "core-a1", "label": "core-a1 (10.10.0.1)", "type": "router" },
+      { "id": "core-b1", "label": "core-b1 (10.50.0.1)", "type": "router" },
+      { "id": "core-b2", "label": "core-b2 (legacy backup router)", "type": "router" },
+      { "id": "fw-siteb-01", "label": "fw-siteb-01 (stateful firewall)", "type": "firewall" },
+      { "id": "server-b", "label": "Site B Server (10.50.0.20)", "type": "server" }
+    ],
+    "links": [
+      { "from": "host-a", "to": "core-a1", "label": "Site A LAN" },
+      { "from": "core-a1", "to": "fw-siteb-01", "label": "WAN path, forward traffic to Site B" },
+      { "from": "fw-siteb-01", "to": "core-b1", "label": "inside interface" },
+      { "from": "core-b1", "to": "server-b", "label": "Site B server subnet" },
+      { "from": "core-b1", "to": "core-b2", "label": "static route (intended as backup only)" },
+      { "from": "core-b2", "to": "core-a1", "label": "secondary WAN path, bypasses fw-siteb-01" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "fw-siteb-01 session log",
+      "content": "07:41:02 NEW-CONN src=10.10.0.15 dst=10.50.0.20 dport=8443 proto=tcp state=SYN_SENT\n07:41:32 SESSION-TIMEOUT src=10.10.0.15 dst=10.50.0.20 dport=8443 reason=no-return-traffic-observed\n07:41:32 note: SYN-ACK from 10.50.0.20 never traversed this firewall for the matching session"
+    },
+    {
+      "source": "core-b1 syslog",
+      "content": "Jul 13 16:02:09 core-b1 %ROUTE-6-CHANGE: static route 10.10.0.0/24 added via core-b2 (added for temp-migration-project, TTL not set)\nJul 14 07:41:02 core-b1 %FLOW: return packet src=10.50.0.20 dst=10.10.0.15 matched route 10.10.0.0/24 via core-b2 (admin distance 1) over direct-via-fw route (admin distance 110)"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "core-b1",
+      "command": "show ip route 10.10.0.0",
+      "output": "Routing entry for 10.10.0.0/24\n  Known via \"static\", distance 1, metric 0\n  Routing Descriptor Blocks:\n  * via core-b2 (10.50.0.254)\n      Route metric is 0, traffic share count is 1\n\nNote: OSPF-learned route to 10.10.0.0/24 via fw-siteb-01 (10.50.0.2) exists with distance 110 but is not preferred (static distance 1 wins)."
+    },
+    {
+      "device": "host-a",
+      "command": "curl -v https://10.50.0.20:8443/health",
+      "output": "* Trying 10.50.0.20:8443...\n* Connected to 10.50.0.20 port 8443\n* (sending request, no response)\ncurl: (28) Failed to connect to 10.50.0.20 port 8443: Connection timed out"
+    },
+    {
+      "device": "core-b2",
+      "command": "show interfaces summary",
+      "output": "Gi0/1: up/up, description 'LEGACY BACKUP LINK - DO NOT USE FOR PRODUCTION', last config change 2024-11-02"
+    }
+  ],
+  "monitoring": {
+    "metric": "siteb_tcp_success_rate",
+    "notes": "Grafana shows TCP handshake success from Site A to the Site B service dropped from 100% to roughly 50% starting 2026-07-13 16:02, exactly when the temp-migration-project static route was added on core-b1. Failures correlate with flows whose return path selection alternates due to ECMP-like load distribution between the static route (dist 1) and the OSPF-learned route (dist 110) evaluated per new connection burst; the firewall shows a matching spike in 'no-return-traffic-observed' session timeouts starting at the same time."
+  },
+  "hints": [
+    "SYN reaches the server (per firewall logs) but the SYN-ACK never comes back through the firewall — look at the return path, not the forward path.",
+    "Check core-b1's routing table for 10.10.0.0/24 — is there more than one route, and which one is actually preferred?",
+    "A static route to 10.10.0.0/24 via core-b2 (admin distance 1) was added last week and is beating the correct OSPF route via fw-siteb-01 (admin distance 110), sending return traffic around the stateful firewall so it drops the asymmetric session."
+  ],
+  "solution": {
+    "root_cause": "A static route to 10.10.0.0/24 via the legacy backup router core-b2 was added on core-b1 on 2026-07-13 for an unrelated migration project. Because static routes have a lower administrative distance (1) than the OSPF-learned route through fw-siteb-01 (110), core-b1 now sends return traffic to Site A via core-b2, bypassing the stateful firewall that saw the outbound SYN, so the firewall never sees the return traffic and the session times out.",
+    "fix": "Remove the stray static route to 10.10.0.0/24 via core-b2 on core-b1 (or raise its administrative distance / restrict it to only failover scenarios) so return traffic follows the same path through fw-siteb-01 as the forward traffic.",
+    "acceptable_answers": [
+      "asymmetric routing",
+      "static route via core-b2",
+      "bypassing the firewall",
+      "return traffic wrong path",
+      "administrative distance",
+      "stray static route"
+    ]
+  }
+}

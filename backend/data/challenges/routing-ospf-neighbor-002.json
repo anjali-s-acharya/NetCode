@@ -1,0 +1,72 @@
+{
+  "id": "routing-ospf-neighbor-002",
+  "title": "OSPF Neighbors Stuck in INIT Between Core Routers",
+  "track": "Routing",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Since a rack swap last night, core router core-dc1-r2 is not learning any OSPF routes from core-dc1-r1 over their direct 10G link. Routes that used to be reachable via that link (the 172.20.0.0/16 server subnets) are now missing from core-dc1-r2's routing table, causing intermittent server-to-server connectivity failures in the data center.",
+    "reportedBy": "Data Center NOC",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "core-dc1-r1 (10.1.1.1) and core-dc1-r2 (10.1.1.2) are directly connected via a point-to-point 10G link (10.1.1.0/30) and both participate in OSPF area 0. core-dc1-r1 owns the 172.20.0.0/16 server subnets and advertises them into OSPF for core-dc1-r2 to reach. Last night core-dc1-r1 was physically swapped to new hardware and its OSPF configuration was re-applied from a saved template.",
+    "nodes": [
+      { "id": "core-dc1-r1", "label": "core-dc1-r1 (10.1.1.1)", "type": "router" },
+      { "id": "core-dc1-r2", "label": "core-dc1-r2 (10.1.1.2)", "type": "router" },
+      { "id": "server-subnet", "label": "Server Subnets (172.20.0.0/16)", "type": "server" }
+    ],
+    "links": [
+      { "from": "core-dc1-r1", "to": "core-dc1-r2", "label": "10G point-to-point link, 10.1.1.0/30, OSPF area 0" },
+      { "from": "core-dc1-r1", "to": "server-subnet", "label": "advertised into OSPF" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "core-dc1-r2 syslog",
+      "content": "Jul 14 05:58:12 core-dc1-r2 %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.1 on Te0/0/1 from LOADING to FULL\nJul 14 05:59:40 core-dc1-r2 %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.1 on Te0/0/1 from FULL to DOWN\nJul 14 05:59:41 core-dc1-r2 %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.1 on Te0/0/1 from DOWN to INIT\nJul 14 06:00:15 core-dc1-r2 %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.1 on Te0/0/1 from INIT to DOWN\nJul 14 06:00:16 core-dc1-r2 %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.1 on Te0/0/1 from DOWN to INIT"
+    },
+    {
+      "source": "core-dc1-r1 syslog",
+      "content": "Jul 14 05:55:02 core-dc1-r1 %SYS-5-CONFIG_I: Configured from memory by console (post-hardware-swap template restore)\nJul 14 05:59:40 core-dc1-r1 %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.2 on Te0/0/1 from FULL to DOWN, Neighbor Down: Dead timer expired"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "core-dc1-r2",
+      "command": "show ip ospf neighbor",
+      "output": "Neighbor ID     Pri   State           Dead Time   Address         Interface\n10.1.1.1          1   INIT/  -        00:00:33    10.1.1.1        TenGigabitEthernet0/0/1"
+    },
+    {
+      "device": "core-dc1-r2",
+      "command": "show ip ospf interface TenGigabitEthernet0/0/1",
+      "output": "TenGigabitEthernet0/0/1 is up, line protocol is up\n  Internet Address 10.1.1.2/30, Area 0\n  Process ID 1, Router ID 10.1.1.2, Network Type POINT_TO_POINT, Cost: 10\n  Timer intervals configured, Hello 10, Dead 40, Wait 40, Retransmit 5\n  Neighbor Count is 1, Adjacent neighbor count is 0"
+    },
+    {
+      "device": "core-dc1-r1",
+      "command": "show ip ospf interface TenGigabitEthernet0/0/1",
+      "output": "TenGigabitEthernet0/0/1 is up, line protocol is up\n  Internet Address 10.1.1.1/30, Area 0\n  Process ID 1, Router ID 10.1.1.1, Network Type POINT_TO_POINT, Cost: 10\n  Timer intervals configured, Hello 5, Dead 20, Wait 20, Retransmit 5\n  Neighbor Count is 1, Adjacent neighbor count is 0"
+    }
+  ],
+  "monitoring": {
+    "metric": "ospf_adjacency_state_core_dc1",
+    "notes": "The OSPF adjacency graph in the monitoring dashboard shows core-dc1-r1<->core-dc1-r2 flapping between INIT and DOWN roughly every 40 seconds since 05:59, exactly matching core-dc1-r1's post-swap config reload. The flap period lines up closely with the dead-interval value on core-dc1-r2 (40s), suggesting the two sides disagree on timer values rather than a physical link problem — interface counters show zero CRC errors on both ends."
+  },
+  "hints": [
+    "The physical link is up on both sides and hello packets are clearly being exchanged (neighbor is seen at all) — this points to a parameter mismatch rather than a cabling or Layer 1 issue.",
+    "Compare the Hello and Dead timer intervals shown in 'show ip ospf interface' on both routers.",
+    "core-dc1-r1 has Hello 5 / Dead 20 while core-dc1-r2 has Hello 10 / Dead 40 — the mismatched hello/dead timers on Te0/0/1 are preventing the adjacency from reaching FULL."
+  ],
+  "solution": {
+    "root_cause": "When core-dc1-r1's OSPF configuration was restored from a saved template after the hardware swap, it was applied with a different hello-interval (5s) and dead-interval (20s) than core-dc1-r2 (10s/40s). OSPF requires matching hello and dead timers on both ends of a link, so the adjacency repeatedly cycles between INIT and DOWN instead of reaching FULL.",
+    "fix": "Set matching OSPF hello-interval and dead-interval values on TenGigabitEthernet0/0/1 on both core-dc1-r1 and core-dc1-r2 (e.g. hello 10 / dead 40 on both) so the neighbor relationship can complete and reach FULL.",
+    "acceptable_answers": [
+      "different hello-interval",
+      "matching hello and dead timers",
+      "cycles between init and down",
+      "hello-interval and dead-interval",
+      "mismatched ospf timers",
+      "timer mismatch"
+    ]
+  }
+}

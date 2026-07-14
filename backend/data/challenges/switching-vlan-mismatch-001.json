@@ -1,0 +1,74 @@
+{
+  "id": "switching-vlan-mismatch-001",
+  "title": "New Desk Can't Reach Anything After Patch Panel Move",
+  "track": "Switching",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "An employee moved to a new desk (cube 4B-112) last night as part of a floor reshuffle. Facilities re-terminated the patch panel run to the new desk this morning. The employee's workstation gets a link light but cannot reach the file server, the printer, or the internet. Other desks on the same floor are unaffected.",
+    "reportedBy": "Facilities/Desktop Support",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "Floor 4 access switch sw-fl4-acc1 serves desk drops for the finance department on VLAN 40 (10.40.10.0/24, gateway 10.40.10.1 on core router core-rtr1). Desk 4B-112's patch panel port was re-terminated last night to a different switch port on sw-fl4-acc1 than it used previously. The employee's laptop connects via that drop to sw-fl4-acc1, which uplinks to core-rtr1 over a trunk carrying VLANs 10, 20, 40, and 99.",
+    "nodes": [
+      { "id": "laptop", "label": "Employee Laptop (4B-112)", "type": "client" },
+      { "id": "sw-fl4-acc1", "label": "sw-fl4-acc1", "type": "switch" },
+      { "id": "core-rtr1", "label": "core-rtr1 (10.40.10.1)", "type": "router" },
+      { "id": "file-srv", "label": "FILE-SRV01 (10.40.10.50)", "type": "server" }
+    ],
+    "links": [
+      { "from": "laptop", "to": "sw-fl4-acc1", "label": "Gi0/14, patch panel drop 4B-112" },
+      { "from": "sw-fl4-acc1", "to": "core-rtr1", "label": "Gi1/0/1 trunk, VLANs 10,20,40,99" },
+      { "from": "core-rtr1", "to": "file-srv", "label": "routed, VLAN 40" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-fl4-acc1 syslog",
+      "content": "Jul 14 07:58:02 sw-fl4-acc1 %LINK-3-UPDOWN: Interface GigabitEthernet0/14, changed state to up\nJul 14 07:58:03 sw-fl4-acc1 %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/14, changed state to up\nJul 14 07:58:04 sw-fl4-acc1 %DHCP_SNOOPING-5-DHCP_SNOOPING_UNTRUSTED_PORT: DHCP request from untrusted port, on vlan 20\nJul 14 08:03:40 sw-fl4-acc1 %DHCP_SNOOPING-5-DHCP_SNOOPING_UNTRUSTED_PORT: DHCP request from untrusted port, on vlan 20"
+    },
+    {
+      "source": "DHCP server dhcp-srv01 lease log",
+      "content": "2026-07-14 08:03:40 DHCPDISCOVER from 00:1a:2b:3c:4d:5e via vlan20-relay\n2026-07-14 08:03:40 DHCPOFFER 10.20.5.114 to 00:1a:2b:3c:4d:5e via vlan20-relay\n2026-07-14 08:03:41 DHCPACK on 10.20.5.114 to 00:1a:2b:3c:4d:5e"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-fl4-acc1",
+      "command": "show interfaces status | include Gi0/1[0-9]",
+      "output": "Gi0/10   4B-108           connected    40         a-full a-1000 10/100/1000BaseTX\nGi0/11   4B-109           connected    40         a-full a-1000 10/100/1000BaseTX\nGi0/12   4B-110           connected    40         a-full a-1000 10/100/1000BaseTX\nGi0/13   4B-111           connected    40         a-full a-1000 10/100/1000BaseTX\nGi0/14   4B-112           connected    20         a-full a-1000 10/100/1000BaseTX\nGi0/15   4B-113           connected    40         a-full a-1000 10/100/1000BaseTX"
+    },
+    {
+      "device": "sw-fl4-acc1",
+      "command": "show running-config interface GigabitEthernet0/14",
+      "output": "interface GigabitEthernet0/14\n description 4B-112\n switchport access vlan 20\n switchport mode access\n spanning-tree portfast\nend"
+    },
+    {
+      "device": "laptop",
+      "command": "ipconfig",
+      "output": "Ethernet adapter Ethernet:\n   IPv4 Address. . . . . . . . . . . : 10.20.5.114\n   Subnet Mask . . . . . . . . . . . : 255.255.255.0\n   Default Gateway . . . . . . . . . : 10.20.5.1"
+    }
+  ],
+  "monitoring": {
+    "metric": "port_vlan_assignment_audit",
+    "notes": "Automated port-audit job flags Gi0/14 on sw-fl4-acc1 as 'VLAN mismatch vs patch panel label': the panel silkscreen and cabling database say drop 4B-112 should map to VLAN 40 (finance), but the live switchport config shows VLAN 20 (guest/staging), which was the previous drop's temporary assignment during the reshuffle. The audit flag first appeared at 07:58, right after the port came up."
+  },
+  "hints": [
+    "The laptop gets a link light and even an IP address, so this isn't a cabling or Layer 1 problem — check which VLAN the port is actually in.",
+    "Compare the VLAN on Gi0/14 (4B-112) against the neighboring desk ports on sw-fl4-acc1, which are all in the finance VLAN.",
+    "Gi0/14 is still configured for VLAN 20 (a staging/guest VLAN left over from before the reshuffle) instead of VLAN 40, so the laptop lands on the wrong subnet with no route to the file server or gateway it needs."
+  ],
+  "solution": {
+    "root_cause": "Port Gi0/14 on sw-fl4-acc1, which now terminates the re-patched drop for desk 4B-112, is still configured as an access port on VLAN 20 (a leftover staging/guest VLAN) instead of VLAN 40 (finance). The laptop receives a valid IP via DHCP but on the wrong subnet, so it cannot reach the file server, printer, or gateway on VLAN 40.",
+    "fix": "Change the switchport access VLAN on Gi0/14 of sw-fl4-acc1 from VLAN 20 to VLAN 40 to match the finance department assignment for drop 4B-112.",
+    "acceptable_answers": [
+      "gi0/14",
+      "wrong vlan",
+      "vlan mismatch",
+      "access vlan 20",
+      "should be vlan 40",
+      "port assigned to wrong vlan"
+    ]
+  }
+}

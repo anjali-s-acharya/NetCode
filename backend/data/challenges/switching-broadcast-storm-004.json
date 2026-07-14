@@ -1,0 +1,82 @@
+{
+  "id": "switching-broadcast-storm-004",
+  "title": "Entire Building Slows to a Crawl After Conference Room AV Cart Reconnected",
+  "track": "Switching",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "Starting at 10:14 this morning, users across multiple floors and multiple VLANs (Sales VLAN 10, Engineering VLAN 20, Guest VLAN 50) report the network becoming unusably slow — web pages timing out, VoIP calls dropping, RDP sessions freezing. Symptoms are building-wide, not isolated to one floor. AV support says they reconnected a conference room presentation cart in Room 3B around the same time after cleaning up cables.",
+    "reportedBy": "NOC / Multiple Floor Reports",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "Room 3B has a wall plate with two jacks (3B-A and 3B-B) that both terminate on access switch sw-fl3-acc2, intended for the presentation cart's laptop input and a secondary display uplink respectively. Both jacks are enabled access ports on VLAN 10. sw-fl3-acc2 uplinks to distribution switch sw-fl3-dist1, which uplinks to core switch sw-core1; sw-core1 interconnects all floor distribution switches. After cable cleanup, the AV cart's single patch cable was mistakenly run from jack 3B-A back into jack 3B-B on the same wall plate, looping both switch ports together on the same switch and same VLAN.",
+    "nodes": [
+      { "id": "cart", "label": "AV Presentation Cart", "type": "client" },
+      { "id": "sw-fl3-acc2", "label": "sw-fl3-acc2", "type": "switch" },
+      { "id": "sw-fl3-dist1", "label": "sw-fl3-dist1", "type": "switch" },
+      { "id": "sw-core1", "label": "sw-core1", "type": "switch" },
+      { "id": "sw-fl1-acc1", "label": "sw-fl1-acc1 (Sales, VLAN 10)", "type": "switch" },
+      { "id": "sw-fl2-acc1", "label": "sw-fl2-acc1 (Engineering, VLAN 20)", "type": "switch" }
+    ],
+    "links": [
+      { "from": "cart", "to": "sw-fl3-acc2", "label": "loop: jack 3B-A to jack 3B-B, both on Gi0/9 and Gi0/10" },
+      { "from": "sw-fl3-acc2", "to": "sw-fl3-dist1", "label": "uplink" },
+      { "from": "sw-fl3-dist1", "to": "sw-core1", "label": "uplink" },
+      { "from": "sw-core1", "to": "sw-fl1-acc1", "label": "distribution link" },
+      { "from": "sw-core1", "to": "sw-fl2-acc1", "label": "distribution link" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-fl3-acc2 syslog",
+      "content": "Jul 14 10:14:11 sw-fl3-acc2 %LINK-3-UPDOWN: Interface GigabitEthernet0/10, changed state to up\nJul 14 10:14:12 sw-fl3-acc2 %SPANTREE-5-TOPOTRAP: Topology Change Notification received on GigabitEthernet0/9 vlan 10\nJul 14 10:14:13 sw-fl3-acc2 %SW_MATM-4-MACFLAP_NOTIF: Host 0011.2233.4455 in vlan 10 is flapping between port Gi0/9 and port Gi0/10\nJul 14 10:14:15 sw-fl3-acc2 %SW_MATM-4-MACFLAP_NOTIF: Host 0011.2233.4455 in vlan 10 is flapping between port Gi0/9 and port Gi0/10"
+    },
+    {
+      "source": "sw-core1 syslog",
+      "content": "Jul 14 10:14:20 sw-core1 %SPANTREE-5-TOPOTRAP: Topology Change Notification received on port-channel1 vlan 10\nJul 14 10:14:22 sw-core1 %SYS-1-CPU_HIGH: CPU utilization 96%, primary process: L2 forwarding / broadcast flooding\nJul 14 10:15:01 sw-core1 %SYS-1-CPU_HIGH: CPU utilization 98%, primary process: L2 forwarding / broadcast flooding"
+    },
+    {
+      "source": "sw-fl1-acc1 syslog",
+      "content": "Jul 14 10:14:25 sw-fl1-acc1 %SYS-1-CPU_HIGH: CPU utilization 91%, primary process: L2 forwarding / broadcast flooding\nJul 14 10:14:27 sw-fl1-acc1 %SW_MATM-4-MACFLAP_NOTIF: Host 0011.2233.4455 in vlan 10 is flapping between port Po1 and port Po1"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-fl3-acc2",
+      "command": "show interfaces counters | include Gi0/9|Gi0/10",
+      "output": "Port       InOctets    InUcastPkts   InBroadcastPkts\nGi0/9      2145996233  812            9821004\nGi0/10     2144881204  798            9820561"
+    },
+    {
+      "device": "sw-fl3-acc2",
+      "command": "show spanning-tree vlan 10",
+      "output": "VLAN0010\n  Spanning tree enabled protocol rstp\nInterface        Role Sts Cost      Prio.Nbr Type\n---------------- ---- --- --------- -------- ------------\nGi0/9            Desg FWD 4         128.9    P2p (edge, portfast enabled, bpdu guard NOT configured)\nGi0/10           Desg FWD 4         128.10   P2p (edge, portfast enabled, bpdu guard NOT configured)"
+    },
+    {
+      "device": "sw-core1",
+      "command": "show processes cpu sorted | exclude 0.00%",
+      "output": "CPU utilization for five seconds: 97%/85%; one minute: 92%; five minutes: 74%\n PID Runtime(ms)  Invoked   uSecs   5Sec   1Min   5Min TTY Process\n 142   8821044     990211    8909  61.20%  55.10%  40.20%   0 L2 Fwd/Flooding\n  88    291022      88211    3300   9.10%   8.90%   7.10%   0 SPAN TREE"
+    }
+  ],
+  "monitoring": {
+    "metric": "core_switch_cpu_and_broadcast_pps",
+    "notes": "Building-wide broadcast packets-per-second spiked from a baseline of ~200 pps to over 480,000 pps at 10:14, holding steady until manual intervention. CPU utilization crossed 90% on sw-core1, sw-fl1-acc1, sw-fl2-acc1, and sw-fl3-dist1 within 15 seconds of each other, radiating outward from sw-fl3-acc2 which spiked first at 10:14:11 — consistent with a loop originating there and flooding across the trunked core."
+  },
+  "hints": [
+    "The outage is building-wide across multiple VLANs and switches, and CPU spiked almost simultaneously everywhere — look for a single originating point rather than treating this as several unrelated issues.",
+    "sw-fl3-acc2 shows the earliest timestamp for the spike, and its MAC address table log shows the same MAC address flapping rapidly between two ports on the same switch.",
+    "Ports Gi0/9 and Gi0/10 on sw-fl3-acc2 (the two jacks for the Room 3B AV cart) are looped together by a single patch cable, and neither port has BPDU Guard configured, so STP portfast edge ports didn't block the loop before the broadcast storm formed."
+  ],
+  "solution": {
+    "root_cause": "AV support ran a single patch cable from jack 3B-A back into jack 3B-B on the same wall plate in Room 3B, physically looping switch ports Gi0/9 and Gi0/10 on sw-fl3-acc2 together on the same VLAN. Both ports were configured with spanning-tree portfast for fast AV device connectivity but without BPDU Guard, so the loop was not blocked and produced a broadcast storm that flooded outward through the trunked uplinks to sw-fl3-dist1, sw-core1, and every distribution switch in the building.",
+    "fix": "Disconnect the looped patch cable between jacks 3B-A and 3B-B on sw-fl3-acc2, then enable BPDU Guard (or disable portfast) on Gi0/9 and Gi0/10 so any future accidental loop on those ports is shut down automatically instead of flooding the network.",
+    "acceptable_answers": [
+      "broadcast storm",
+      "bridging loop",
+      "cable looped",
+      "gi0/9 and gi0/10",
+      "bpdu guard not configured",
+      "3b-a to 3b-b"
+    ]
+  }
+}

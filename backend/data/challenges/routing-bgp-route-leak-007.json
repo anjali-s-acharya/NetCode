@@ -1,0 +1,95 @@
+{
+  "id": "routing-bgp-route-leak-007",
+  "title": "Backup ISP Link Saturated After Prefix-List Update Leaks Outbound Traffic",
+  "track": "Routing",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "Since approximately 02:30 last night, Meridian Retail's enterprise network has experienced widespread slowness for outbound internet traffic (cloud SaaS apps, card-processing API calls, general browsing) enterprise-wide, with users reporting timeouts and high latency. The primary 1 Gbps ISP-Alpha transit link looks fine and lightly loaded, but NOC noticed the 100 Mbps backup ISP-Beta link, normally reserved for a partner data center route, is now running close to 100% utilization. A prefix-list change was deployed on edge-rtr-beta at 02:15 as part of onboarding a new partner subnet.",
+    "reportedBy": "NOC / Network Engineering",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "Meridian Retail (AS 65001) is multi-homed with two transit providers: ISP-Alpha (AS 65100), a 1 Gbps primary link terminated on edge-rtr-alpha, and ISP-Beta (AS 65200), a 100 Mbps secondary link terminated on edge-rtr-beta that is intended only to carry a small set of routes to the partner data center (198.51.100.0/24) plus act as a low-preference backup default path. edge-rtr-alpha and edge-rtr-beta both run iBGP to core-rtr01, which makes the final best-path selection for outbound traffic based on local-preference learned from each edge router. An inbound route-map on edge-rtr-beta (RM-BETA-IN) is supposed to set local-preference 200 (higher than Alpha's default 150) only for the specific partner prefix-list PL-BETA-PARTNER, and local-preference 50 (lower than Alpha) for everything else, so ISP-Beta is only preferred for the partner block. At 02:15 an engineer updated PL-BETA-PARTNER to add the newly onboarded partner subnet 198.51.101.0/24.",
+    "nodes": [
+      { "id": "core-rtr01", "label": "core-rtr01 (iBGP best-path selection)", "type": "router" },
+      { "id": "edge-rtr-alpha", "label": "edge-rtr-alpha (AS 65001, peers ISP-Alpha AS 65100)", "type": "router" },
+      { "id": "edge-rtr-beta", "label": "edge-rtr-beta (AS 65001, peers ISP-Beta AS 65200)", "type": "router" },
+      { "id": "isp-alpha", "label": "ISP-Alpha (1 Gbps primary transit)", "type": "router" },
+      { "id": "isp-beta", "label": "ISP-Beta (100 Mbps backup / partner-only link)", "type": "router" },
+      { "id": "partner-dc", "label": "Partner Data Center (198.51.100.0/24, 198.51.101.0/24)", "type": "server" },
+      { "id": "internet", "label": "General Internet (SaaS, card-processing API, etc.)", "type": "server" }
+    ],
+    "links": [
+      { "from": "core-rtr01", "to": "edge-rtr-alpha", "label": "iBGP, learns routes with local-pref 150 default" },
+      { "from": "core-rtr01", "to": "edge-rtr-beta", "label": "iBGP, learns routes via RM-BETA-IN local-pref policy" },
+      { "from": "edge-rtr-alpha", "to": "isp-alpha", "label": "eBGP, 1 Gbps" },
+      { "from": "edge-rtr-beta", "to": "isp-beta", "label": "eBGP, 100 Mbps" },
+      { "from": "isp-alpha", "to": "internet", "label": "primary transit path" },
+      { "from": "isp-beta", "to": "partner-dc", "label": "intended purpose: partner-only route" },
+      { "from": "isp-beta", "to": "internet", "label": "unintended: now carrying general outbound traffic" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "edge-rtr-beta syslog",
+      "content": "Jul 14 02:15:41 edge-rtr-beta %SYS-5-CONFIG_I: Configured from console by jchen (CHG0042205 - add partner subnet 198.51.101.0/24 to PL-BETA-PARTNER)\nJul 14 02:15:41 edge-rtr-beta CHANGE: ip prefix-list PL-BETA-PARTNER seq 5 permit 198.51.100.0/24\nJul 14 02:15:41 edge-rtr-beta CHANGE: ip prefix-list PL-BETA-PARTNER seq 10 permit 198.51.101.0/24\nJul 14 02:15:41 edge-rtr-beta CHANGE: ip prefix-list PL-BETA-PARTNER seq 15 permit 0.0.0.0/0 le 32\nJul 14 02:15:42 edge-rtr-beta %ROUTE-MAP-6-REEVAL: route-map RM-BETA-IN re-evaluated, 184213 prefixes now matched by clause 10 (was 2)"
+    },
+    {
+      "source": "NOC change log",
+      "content": "02:10 jchen: pushing prefix-list update for partner onboarding, adding 198.51.101.0/24, should be low risk\n02:16 jchen: change applied, partner subnet reachable, closing change window\n08:41 noc-shift2: multiple 'slow internet' tickets coming in from HQ and both DCs, checking WAN links now"
+    },
+    {
+      "source": "edge-rtr-beta interface log",
+      "content": "Jul 14 03:02:18 edge-rtr-beta %LINK-3-UTIL_HIGH: GigabitEthernet0/1 (ISP-Beta uplink) utilization 92% sustained over 5 min (link is provisioned at 100 Mbps)\nJul 14 03:02:18 edge-rtr-beta %QUEUE-4-DROP: output queue drops on GigabitEthernet0/1, 14203 packets dropped in last 5 min interval"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "edge-rtr-beta",
+      "command": "show ip prefix-list PL-BETA-PARTNER",
+      "output": "ip prefix-list PL-BETA-PARTNER: 3 entries\n   seq 5 permit 198.51.100.0/24\n   seq 10 permit 198.51.101.0/24\n   seq 15 permit 0.0.0.0/0 le 32\n\nNote from ticket history: seq 15 was meant to read 'deny 0.0.0.0/0 le 32' as an explicit catch-all deny (prefix-lists deny by default when no match occurs, but a prior audit added an explicit permit-any as a placeholder that was never removed). The new seq 10 entry was inserted correctly, but the pre-existing placeholder line at seq 15 was not caught during review."
+    },
+    {
+      "device": "edge-rtr-beta",
+      "command": "show route-map RM-BETA-IN",
+      "output": "route-map RM-BETA-IN, permit, sequence 10\n  Match clauses:\n    ip address prefix-list PL-BETA-PARTNER\n  Set clauses:\n    local-preference 200\nroute-map RM-BETA-IN, permit, sequence 20\n  Match clauses:\n  Set clauses:\n    local-preference 50"
+    },
+    {
+      "device": "edge-rtr-beta",
+      "command": "show ip bgp neighbor 203.0.113.254 received-routes | count",
+      "output": "Total prefixes received from ISP-Beta (AS 65200): 184,215\nPrefixes matching route-map clause 10 (local-pref 200): 184,213\nPrefixes matching route-map clause 20 (local-pref 50): 2\n(Expected: ~2 prefixes at local-pref 200 for the partner block, remainder at local-pref 50)"
+    },
+    {
+      "device": "core-rtr01",
+      "command": "show ip bgp 8.8.8.0",
+      "output": "BGP routing table entry for 8.8.8.0/24\nPaths: (2 available, best #2)\n  65100 (via edge-rtr-alpha, iBGP)\n    Local-pref 150, valid, internal\n  65200 (via edge-rtr-beta, iBGP)\n    Local-pref 200, valid, internal, best\n\nNote: destination 8.8.8.0/24 has no relation to the partner data center, yet is now being preferred out ISP-Beta due to higher local-preference."
+    },
+    {
+      "device": "edge-rtr-alpha",
+      "command": "show interfaces GigabitEthernet0/0 | include rate",
+      "output": "5 minute input rate 210000000 bits/sec, 5 minute output rate 95000000 bits/sec\n(Link capacity: 1,000,000,000 bits/sec — running at under 10% of primary link's capacity while backup link is saturated)"
+    }
+  ],
+  "monitoring": {
+    "metric": "wan_link_utilization_and_latency",
+    "notes": "Grafana shows ISP-Beta uplink utilization jump from a steady ~8% baseline (only partner traffic) to 92-98% starting 2026-07-14 02:16, one minute after the prefix-list change (CHG0042205) was applied. In the same window, ISP-Alpha's utilization dropped from its normal ~35% baseline to under 10%. Application latency dashboards show p95 latency for outbound SaaS calls increasing from ~40ms to 800ms+ starting at the same timestamp, with packet loss alerts beginning at 03:02 once the Beta link's queue started dropping packets — all three signals (Beta utilization, Alpha utilization, latency/loss) pivot at the same moment, pointing at a routing preference change rather than a capacity or hardware issue."
+  },
+  "hints": [
+    "The primary 1 Gbps ISP-Alpha link is nearly idle while the 100 Mbps ISP-Beta backup link — which should only carry partner data center traffic — is saturated. Compare local-preference values for a random, non-partner destination on both edge routers.",
+    "On edge-rtr-beta, check how many prefixes the inbound route-map RM-BETA-IN's high-local-preference clause is matching, versus how many it should be matching for just the partner subnets.",
+    "The prefix-list PL-BETA-PARTNER has a leftover placeholder entry, 'seq 15 permit 0.0.0.0/0 le 32', that matches every prefix and was never removed — combined with the new seq 10 entry, it causes RM-BETA-IN to set local-preference 200 on essentially all 184,000+ routes learned from ISP-Beta instead of just the ~2 partner routes, so core-rtr01 now prefers ISP-Beta for almost all outbound traffic."
+  ],
+  "solution": {
+    "root_cause": "The inbound prefix-list PL-BETA-PARTNER on edge-rtr-beta contained a leftover placeholder entry ('seq 15 permit 0.0.0.0/0 le 32') that matches every possible prefix. When the 02:15 change added the new partner subnet 198.51.101.0/24, this pre-existing catch-all entry was not caught in review, so route-map RM-BETA-IN's clause 10 (set local-preference 200) ends up matching essentially all ~184,000 prefixes received from ISP-Beta instead of only the two partner routes. Since local-preference 200 beats ISP-Alpha's default of 150, core-rtr01 now prefers the 100 Mbps ISP-Beta backup link for nearly all outbound traffic, saturating it and causing widespread latency and packet loss.",
+    "fix": "Remove the catch-all 'permit 0.0.0.0/0 le 32' placeholder entry from PL-BETA-PARTNER (or replace it with an explicit deny) so route-map RM-BETA-IN clause 10 only matches the intended partner subnets (198.51.100.0/24 and 198.51.101.0/24), restoring local-preference 50 for all other routes learned from ISP-Beta.",
+    "acceptable_answers": [
+      "catch-all prefix-list entry",
+      "permit 0.0.0.0/0 le 32",
+      "leaking local-preference",
+      "route leak on beta",
+      "prefix-list matching all routes",
+      "local-preference 200 on non-partner routes"
+    ]
+  }
+}

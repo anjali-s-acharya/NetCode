@@ -1,0 +1,79 @@
+{
+  "id": "routing-default-route-001",
+  "title": "Branch Site Loses Internet After Router Maintenance",
+  "track": "Routing",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "The Reno branch office lost all internet access at 06:30 this morning, right after scheduled maintenance on the branch edge router br-reno-edge01. Internal LAN traffic and site-to-site VPN to HQ still work fine, but nothing reaches the public internet (no web browsing, no cloud SaaS access). Staff started arriving at 08:00 and immediately opened tickets.",
+    "reportedBy": "Reno Branch Office Manager",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "The Reno branch LAN (192.168.40.0/24) is served by edge router br-reno-edge01, which has a WAN uplink to ISP router isp-reno-gw (203.0.113.1) and a secondary interface toward the HQ VPN concentrator. During last night's maintenance window, the ISP circuit was reterminated and the ISP handed off a new gateway address, but the router's default route was not fully updated to match.",
+    "nodes": [
+      { "id": "lan-clients", "label": "Reno LAN Clients (192.168.40.0/24)", "type": "client" },
+      { "id": "br-reno-edge01", "label": "br-reno-edge01 (192.168.40.1)", "type": "router" },
+      { "id": "isp-reno-gw", "label": "isp-reno-gw (203.0.113.1)", "type": "router" },
+      { "id": "internet", "label": "Internet", "type": "server" }
+    ],
+    "links": [
+      { "from": "lan-clients", "to": "br-reno-edge01", "label": "LAN default gateway" },
+      { "from": "br-reno-edge01", "to": "isp-reno-gw", "label": "WAN uplink (new ISP handoff)" },
+      { "from": "isp-reno-gw", "to": "internet", "label": "ISP transit" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "br-reno-edge01 syslog",
+      "content": "Jul 14 06:22:03 br-reno-edge01 CHANGE: user admin configured static route 0.0.0.0/0\nJul 14 06:22:03 br-reno-edge01 CHANGE: route committed, next-hop 203.0.113.254\nJul 14 06:22:04 br-reno-edge01 %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to up\nJul 14 06:30:11 br-reno-edge01 %ICMP-4-UNREACH: destination unreachable sending to 8.8.8.8 via 203.0.113.254\nJul 14 06:30:44 br-reno-edge01 %ICMP-4-UNREACH: destination unreachable sending to 1.1.1.1 via 203.0.113.254"
+    },
+    {
+      "source": "Reno helpdesk chat",
+      "content": "08:02 user1: internet is down, can load internal timesheet app fine though\n08:05 user2: same here, teams/zoom won't connect\n08:07 it-onsite: rebooted my laptop, still nothing outbound. LAN stuff (fileserver, printer) works"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "br-reno-edge01",
+      "command": "show ip route",
+      "output": "Codes: S - static, C - connected, O - OSPF\n\nGateway of last resort is 203.0.113.254 to network 0.0.0.0\n\nS*   0.0.0.0/0 [1/0] via 203.0.113.254\nC    192.168.40.0/24 is directly connected, Vlan40\nC    203.0.113.0/30 is directly connected, GigabitEthernet0/1\nS    10.10.0.0/16 [1/0] via 172.16.99.1 (HQ VPN tunnel)"
+    },
+    {
+      "device": "br-reno-edge01",
+      "command": "ping 203.0.113.254",
+      "output": "Sending 5, 100-byte ICMP Echos to 203.0.113.254, timeout is 2 seconds:\n.....\nSuccess rate is 0 percent (0/5)"
+    },
+    {
+      "device": "br-reno-edge01",
+      "command": "ping 203.0.113.1",
+      "output": "Sending 5, 100-byte ICMP Echos to 203.0.113.1, timeout is 2 seconds:\n!!!!!\nSuccess rate is 100 percent (5/5), round-trip min/avg/max = 1/2/4 ms"
+    },
+    {
+      "device": "isp-reno-gw (ISP-provided handoff sheet)",
+      "command": "circuit handoff details",
+      "output": "Circuit ID: RNO-4471-FIBER\nCustomer-side interface: 203.0.113.2/30\nISP gateway (new): 203.0.113.1\nEffective: 2026-07-14 06:00 (post cutover)\nNote: previous gateway 203.0.113.254 has been decommissioned as part of the fiber cutover."
+    }
+  ],
+  "monitoring": {
+    "metric": "wan_uplink_reachability_reno",
+    "notes": "PRTG shows the physical WAN interface on br-reno-edge01 as up/up continuously since 06:22, but the 'default gateway reachability' sensor (ICMP to configured next-hop) has been failing 100% since 06:30, immediately after the static route change. A separate sensor pinging the ISP's actual handoff IP (203.0.113.1) shows healthy round-trip times the entire time, indicating the physical circuit is fine and the problem is purely a routing configuration issue."
+  },
+  "hints": [
+    "LAN and site-to-site VPN traffic work, but internet doesn't — that isolates the problem to the WAN default route on br-reno-edge01.",
+    "Check whether the static default route's next-hop address is actually reachable from br-reno-edge01.",
+    "The default route points to 203.0.113.254, but the ISP's cutover sheet shows the new gateway is 203.0.113.1 — 203.0.113.254 was decommissioned during last night's fiber cutover."
+  ],
+  "solution": {
+    "root_cause": "During last night's maintenance the ISP re-terminated the circuit and reassigned the gateway address to 203.0.113.1, but br-reno-edge01's default static route was configured (or left) pointing to the old, now-decommissioned gateway 203.0.113.254, which is unreachable.",
+    "fix": "Update the default static route on br-reno-edge01 to use next-hop 203.0.113.1 instead of 203.0.113.254, matching the new ISP handoff.",
+    "acceptable_answers": [
+      "203.0.113.254",
+      "wrong next-hop",
+      "old isp gateway",
+      "decommissioned gateway",
+      "default route next-hop",
+      "203.0.113.1"
+    ]
+  }
+}

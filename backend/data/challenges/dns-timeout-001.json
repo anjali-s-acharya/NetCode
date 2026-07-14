@@ -1,0 +1,75 @@
+{
+  "id": "dns-timeout-001",
+  "title": "Intermittent DNS Resolution Timeouts",
+  "track": "DNS",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Users in the Chicago branch report that internal apps (intranet.corp.local, crm.corp.local) intermittently fail to load with 'server not found' errors, roughly 1 in 3 attempts. Public websites load fine. Issue started this morning around 08:00 and is not affecting the New York branch.",
+    "reportedBy": "Chicago IT Helpdesk",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "Chicago branch clients (10.20.1.0/24) are configured via DHCP with two DNS servers: primary dns-chi-01 (10.20.1.10) and secondary dns-chi-02 (10.20.1.11). Both forward internal *.corp.local queries to the corporate DNS server dns-corp-01 (10.0.0.53) over the WAN link to New York. New York branch clients use only dns-nyc-01 (10.10.1.10), which forwards directly to dns-corp-01.",
+    "nodes": [
+      { "id": "client-chi", "label": "Chicago Clients (10.20.1.0/24)", "type": "client" },
+      { "id": "dns-chi-01", "label": "dns-chi-01 (10.20.1.10)", "type": "dns-server" },
+      { "id": "dns-chi-02", "label": "dns-chi-02 (10.20.1.11)", "type": "dns-server" },
+      { "id": "dns-corp-01", "label": "dns-corp-01 (10.0.0.53)", "type": "dns-server" }
+    ],
+    "links": [
+      { "from": "client-chi", "to": "dns-chi-01", "label": "primary resolver" },
+      { "from": "client-chi", "to": "dns-chi-02", "label": "secondary resolver" },
+      { "from": "dns-chi-01", "to": "dns-corp-01", "label": "forwarder" },
+      { "from": "dns-chi-02", "to": "dns-corp-01", "label": "forwarder (decommissioned target)" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "dns-chi-02 query log",
+      "content": "08:02:11 query: crm.corp.local IN A -> forwarding to 10.0.0.53\n08:02:11 error: timeout waiting for response from forwarder 10.0.0.53\n08:02:41 query: intranet.corp.local IN A -> forwarding to 10.0.0.53\n08:02:41 error: timeout waiting for response from forwarder 10.0.0.53\n08:03:02 query: crm.corp.local IN A -> forwarding to 10.0.0.53\n08:03:02 error: timeout waiting for response from forwarder 10.0.0.53"
+    },
+    {
+      "source": "dns-chi-01 query log",
+      "content": "08:02:05 query: intranet.corp.local IN A -> forwarding to 10.0.0.53\n08:02:05 response: 172.16.5.20 (18ms)\n08:02:30 query: crm.corp.local IN A -> forwarding to 10.0.0.53\n08:02:30 response: 172.16.5.21 (21ms)"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "dns-chi-02",
+      "command": "show forwarders",
+      "output": "Forwarder zone: corp.local\n  Forward-to: 10.0.0.53 (dns-corp-01)\n  Status: NO RESPONSE (last 47 attempts)\n  Note: 10.0.0.53 was reassigned to dns-corp-02 during last week's datacenter migration; old dns-corp-01 host at 10.0.0.53 was decommissioned 2026-07-10."
+    },
+    {
+      "device": "dns-chi-01",
+      "command": "show forwarders",
+      "output": "Forwarder zone: corp.local\n  Forward-to: 10.0.0.60 (dns-corp-02)\n  Status: HEALTHY"
+    },
+    {
+      "device": "client-chi (sample laptop)",
+      "command": "ipconfig /all | findstr DNS",
+      "output": "DNS Servers . . . . . . . . . . : 10.20.1.10\n                                    10.20.1.11"
+    }
+  ],
+  "monitoring": {
+    "metric": "dns_query_success_rate_chi",
+    "notes": "Grafana shows dns-chi-01 forwarder success rate steady at 100%. dns-chi-02 forwarder success rate dropped to 0% at 2026-07-10 09:15, coinciding with the datacenter migration decommission window. Chicago clients round-robin between the two resolvers, so roughly a third of queries hit the failing dns-chi-02 (client retry behavior makes it feel like ~1 in 3)."
+  },
+  "hints": [
+    "Compare the forwarder configuration on dns-chi-01 (working) against dns-chi-02 (failing) — they should point to the same upstream.",
+    "Check the CLI output note on dns-chi-02 about the datacenter migration — what happened to the old dns-corp-01 address?",
+    "dns-chi-02 is still forwarding to the decommissioned 10.0.0.53 instead of the new dns-corp-02 at 10.0.0.60."
+  ],
+  "solution": {
+    "root_cause": "dns-chi-02's forwarder still points to the decommissioned dns-corp-01 address (10.0.0.53) after last week's datacenter migration, while dns-chi-01 was updated to the new dns-corp-02 address (10.0.0.60). Since clients round-robin between the two resolvers, roughly a third of queries hit the stale forwarder and time out.",
+    "fix": "Update dns-chi-02's forwarder for the corp.local zone to point to 10.0.0.60 (dns-corp-02), matching dns-chi-01.",
+    "acceptable_answers": [
+      "decommissioned",
+      "stale forwarder",
+      "forwarder still points",
+      "dns-chi-02",
+      "10.0.0.53",
+      "outdated forwarder"
+    ]
+  }
+}
