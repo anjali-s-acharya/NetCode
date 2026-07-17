@@ -1,0 +1,66 @@
+{
+  "id": "sdwan-policy-misroute-001",
+  "title": "Voice Quality Tanked at Branch 12 After Policy Update",
+  "track": "SD-WAN",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Since yesterday's SD-WAN policy push, users at Branch 12 report choppy, robotic-sounding calls. Data applications feel normal. Other branches are unaffected. Yesterday afternoon the network team activated an updated centralized policy in vManage intended to steer bulk backup traffic onto the internet transport.",
+    "reportedBy": "Branch 12 Office Manager",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "Branch 12's Catalyst SD-WAN edge (cedge-br12) has two transports: MPLS (biz-internet class, low latency/jitter) and broadband internet. The intended design steers voice (DSCP EF) over MPLS and bulk/backup traffic over internet, via a centralized data policy applied in vManage. Yesterday's policy revision added a new sequence for backup traffic.",
+    "nodes": [
+      { "id": "phones-br12", "label": "Branch 12 Phones (DSCP EF)", "type": "client" },
+      { "id": "cedge-br12", "label": "cedge-br12", "type": "router" },
+      { "id": "mpls", "label": "MPLS transport", "type": "server" },
+      { "id": "inet", "label": "Internet transport", "type": "server" }
+    ],
+    "links": [
+      { "from": "phones-br12", "to": "cedge-br12", "label": "voice VLAN" },
+      { "from": "cedge-br12", "to": "mpls", "label": "TLOC mpls (intended for voice)" },
+      { "from": "cedge-br12", "to": "inet", "label": "TLOC biz-internet (bulk)" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "vManage audit log",
+      "content": "2026-07-16 15:22:04 policy 'DATA-POLICY-BRANCHES' activated by admin j.arnett (rev 14)\n2026-07-16 15:22:04 change summary: added sequence 35 'Backup-to-Internet' (match source 10.12.0.0/16 -> set local-tloc color biz-internet)"
+    },
+    {
+      "source": "voice quality monitor (Branch 12)",
+      "content": "2026-07-16 15:25 MOS dropped from 4.3 to 2.6 for all Branch 12 calls\n2026-07-16 15:25 jitter avg 38ms (baseline 3ms), loss 1.8%"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "cedge-br12",
+      "command": "show sdwan policy data-policy-filter",
+      "output": "data-policy DATA-POLICY-BRANCHES\n direction from-service\n  sequence 35  Backup-to-Internet\n   match\n    source-ip 10.12.0.0/16\n   action accept\n    set\n     local-tloc color biz-internet\n  sequence 45  Voice-to-MPLS\n   match\n    dscp 46\n   action accept\n    set\n     local-tloc color mpls"
+    },
+    {
+      "device": "cedge-br12",
+      "command": "show sdwan app-fwd cflowd flows | include 10.12.150",
+      "output": "src 10.12.150.21 dst 10.0.5.10 dscp 46 out-intf ge0/1 (biz-internet)  <- voice RTP\nsrc 10.12.150.34 dst 10.0.5.10 dscp 46 out-intf ge0/1 (biz-internet)  <- voice RTP"
+    }
+  ],
+  "monitoring": {
+    "metric": "tunnel_sla_by_transport_br12",
+    "notes": "Per-transport SLA graphs for Branch 12 show the MPLS tunnel healthy (jitter 2-4ms) and the internet tunnel at 30-45ms jitter with periodic loss — normal for broadband. At 15:25 yesterday, voice flows (DSCP 46) visibly shifted from the MPLS tunnel to the internet tunnel in the flow records, coinciding exactly with the rev-14 policy activation. Branch 12's entire site prefix is 10.12.0.0/16, which includes the voice subnet 10.12.150.0/24."
+  },
+  "hints": [
+    "Data policy sequences are evaluated top-down and stop at the first match — check which sequence Branch 12's voice traffic hits first.",
+    "The new sequence 35 matches source 10.12.0.0/16 — does that include the voice subnet, and does it come before or after the voice sequence (45)?",
+    "Sequence 35 'Backup-to-Internet' matches all of 10.12.0.0/16 (which contains the voice subnet 10.12.150.0/24) and sits above sequence 45, so voice is steered to biz-internet before the DSCP-46 rule is ever evaluated. Narrow the match to the backup server subnet or move the voice sequence above it."
+  ],
+  "solution": {
+    "root_cause": "The rev-14 centralized data policy added sequence 35 matching source 10.12.0.0/16 (the entire Branch 12 site, including the voice subnet 10.12.150.0/24) with 'set local-tloc color biz-internet'. Because sequences evaluate top-down and first-match wins, voice traffic now matches sequence 35 before ever reaching the voice sequence 45 (dscp 46 -> mpls), so RTP rides the high-jitter internet transport and call quality collapsed.",
+    "fix": "Narrow sequence 35's match to the actual backup subnet (e.g. 10.12.200.0/24) or add a dscp 46 exclusion, or reorder so the Voice-to-MPLS sequence precedes the backup sequence; then re-activate the policy and confirm DSCP-46 flows return to the mpls TLOC.",
+    "acceptable_answers": [
+      ["sequence 35", "first match", "top-down", "before the voice", "matches all", "10.12.0.0/16", "includes the voice subnet", "too broad", "catches voice"],
+      ["biz-internet", "internet transport", "reorder", "narrow the match", "move the voice sequence", "backup subnet"]
+    ],
+    "min_matches": 2
+  }
+}

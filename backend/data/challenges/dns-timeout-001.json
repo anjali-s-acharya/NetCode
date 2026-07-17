@@ -10,7 +10,7 @@
     "priority": "High"
   },
   "topology": {
-    "description": "Chicago branch clients (10.20.1.0/24) are configured via DHCP with two DNS servers: primary dns-chi-01 (10.20.1.10) and secondary dns-chi-02 (10.20.1.11). Both forward internal *.corp.local queries to the corporate DNS server dns-corp-01 (10.0.0.53) over the WAN link to New York. New York branch clients use only dns-nyc-01 (10.10.1.10), which forwards directly to dns-corp-01.",
+    "description": "Chicago branch clients (10.20.1.0/24) are configured via DHCP with two DNS servers: primary dns-chi-01 (10.20.1.10) and secondary dns-chi-02 (10.20.1.11) -- both Cisco ISR branch routers configured as local DNS forwarders ('ip dns server' + 'ip name-server') so branch clients don't have to cross the WAN for every lookup. Both forward internal *.corp.local queries to the corporate DNS server dns-corp-01 (10.0.0.53) over the WAN link to New York. New York branch clients use only dns-nyc-01 (10.10.1.10), which forwards directly to dns-corp-01.",
     "nodes": [
       { "id": "client-chi", "label": "Chicago Clients (10.20.1.0/24)", "type": "client" },
       { "id": "dns-chi-01", "label": "dns-chi-01 (10.20.1.10)", "type": "dns-server" },
@@ -37,13 +37,23 @@
   "cli_outputs": [
     {
       "device": "dns-chi-02",
-      "command": "show forwarders",
-      "output": "Forwarder zone: corp.local\n  Forward-to: 10.0.0.53 (dns-corp-01)\n  Status: NO RESPONSE (last 47 attempts)\n  Note: 10.0.0.53 was reassigned to dns-corp-02 during last week's datacenter migration; old dns-corp-01 host at 10.0.0.53 was decommissioned 2026-07-10."
+      "command": "show running-config | include ip name-server",
+      "output": "ip name-server 10.0.0.53\n! Note: 10.0.0.53 was reassigned to dns-corp-02 during last week's datacenter migration; old dns-corp-01 host at 10.0.0.53 was decommissioned 2026-07-10."
+    },
+    {
+      "device": "dns-chi-02",
+      "command": "show hosts",
+      "output": "Default domain is corp.local\nName/address lookup uses domain service\nName servers are 10.0.0.53\n\nHost                 Port  Flags      Age Type   Address(es)\ncrm.corp.local        None  (temp, EX)   0 ***TIMEOUT***"
     },
     {
       "device": "dns-chi-01",
-      "command": "show forwarders",
-      "output": "Forwarder zone: corp.local\n  Forward-to: 10.0.0.60 (dns-corp-02)\n  Status: HEALTHY"
+      "command": "show running-config | include ip name-server",
+      "output": "ip name-server 10.0.0.60"
+    },
+    {
+      "device": "dns-chi-01",
+      "command": "show hosts",
+      "output": "Default domain is corp.local\nName/address lookup uses domain service\nName servers are 10.0.0.60\n\nHost                 Port  Flags      Age Type   Address(es)\ncrm.corp.local        None  (perm, OK)   0 IP     172.16.5.21"
     },
     {
       "device": "client-chi (sample laptop)",
@@ -64,12 +74,9 @@
     "root_cause": "dns-chi-02's forwarder still points to the decommissioned dns-corp-01 address (10.0.0.53) after last week's datacenter migration, while dns-chi-01 was updated to the new dns-corp-02 address (10.0.0.60). Since clients round-robin between the two resolvers, roughly a third of queries hit the stale forwarder and time out.",
     "fix": "Update dns-chi-02's forwarder for the corp.local zone to point to 10.0.0.60 (dns-corp-02), matching dns-chi-01.",
     "acceptable_answers": [
-      "decommissioned",
-      "stale forwarder",
-      "forwarder still points",
-      "dns-chi-02",
-      "10.0.0.53",
-      "outdated forwarder"
-    ]
+      ["decommissioned", "stale forwarder", "forwarder still points", "outdated forwarder", "old dns server", "dead server"],
+      ["dns-chi-02", "10.0.0.53", "secondary dns", "secondary resolver"]
+    ],
+    "min_matches": 2
   }
 }

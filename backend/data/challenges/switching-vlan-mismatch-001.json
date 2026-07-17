@@ -63,12 +63,9 @@
     "root_cause": "Port Gi0/14 on sw-fl4-acc1, which now terminates the re-patched drop for desk 4B-112, is still configured as an access port on VLAN 20 (a leftover staging/guest VLAN) instead of VLAN 40 (finance). The laptop receives a valid IP via DHCP but on the wrong subnet, so it cannot reach the file server, printer, or gateway on VLAN 40.",
     "fix": "Change the switchport access VLAN on Gi0/14 of sw-fl4-acc1 from VLAN 20 to VLAN 40 to match the finance department assignment for drop 4B-112.",
     "acceptable_answers": [
-      "gi0/14",
-      "wrong vlan",
-      "vlan mismatch",
-      "access vlan 20",
-      "should be vlan 40",
-      "port assigned to wrong vlan"
-    ]
+      ["wrong vlan", "vlan mismatch", "access vlan 20", "should be vlan 40", "port assigned to wrong vlan", "incorrect vlan"],
+      ["gi0/14", "gigabitethernet0/14", "4b-112", "vlan 40"]
+    ],
+    "min_matches": 2
   }
 }

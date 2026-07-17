@@ -52,8 +52,13 @@
     },
     {
       "device": "dhcp-mktg",
-      "command": "show scope 10.30.2.0/24 options",
-      "output": "Option 006 (DNS Servers): 10.0.0.60, 10.0.0.61\nLease for 10.30.2.87 (PRIYA-LT): active, options honored at lease time"
+      "command": "show running-config | section dhcp pool MKTG-VLAN30",
+      "output": "ip dhcp pool MKTG-VLAN30\n network 10.30.2.0 255.255.255.0\n default-router 10.30.2.1\n dns-server 10.0.0.60 10.0.0.61"
+    },
+    {
+      "device": "dhcp-mktg",
+      "command": "show ip dhcp binding 10.30.2.87",
+      "output": "IP address       Client-ID/Hardware address/User name    Lease expiration          Type\n10.30.2.87       0100.1a2b.3c4d.5e                        Jul 21 2026 09:14 AM      Automatic"
     }
   ],
   "monitoring": {

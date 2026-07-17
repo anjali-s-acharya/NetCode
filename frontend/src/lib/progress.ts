@@ -1,3 +1,5 @@
+import { recordActivity } from "./streak";
+
 const STORAGE_KEY = "netcode.progress.v1";
 export const PROGRESS_UPDATED_EVENT = "netcode-progress-updated";
 
@@ -34,6 +36,7 @@ export function markSolved(challengeId: string, points: number): ProgressState {
     state.solvedIds.push(challengeId);
     state.totalPoints += points;
     save(state);
+    recordActivity();
     window.dispatchEvent(new Event(PROGRESS_UPDATED_EVENT));
   }
   return state;

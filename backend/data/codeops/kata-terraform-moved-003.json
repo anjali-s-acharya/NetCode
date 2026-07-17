@@ -1,0 +1,27 @@
+{
+  "id": "kata-terraform-moved-003",
+  "title": "Kata: Rename a Resource Without Destroying It",
+  "track": "Terraform",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "You renamed the Terraform resource fw_nat_rule.vpn_exempt to fw_nat_rule.ra_vpn_nat_exemption to meet the naming standard. Without extra code, 'terraform plan' now shows 1 to destroy / 1 to add — which would drop every VPN session. Fill in the block that tells Terraform the resource moved, so the plan shows zero changes.",
+    "code_context": "resource \"fw_nat_rule\" \"ra_vpn_nat_exemption\" {\n  name = \"vpn-exempt\"\n  # ...unchanged attributes...\n}\n\n____\n# terraform plan  ->  No changes. (0 to add, 0 to change, 0 to destroy)",
+    "use_case": "Terraform tracks resources by address (type + name) in state — a rename is a new address, which plans as destroy+create of real infrastructure. The moved block records the rename in code (reviewable in the PR), unlike 'terraform state mv' which mutates state out-of-band."
+  },
+  "hints": [
+    "Terraform 1.1+ has a top-level block specifically for declaring that a resource's address changed.",
+    "The block needs a 'from' (old address) and a 'to' (new address).",
+    "moved {\n  from = fw_nat_rule.vpn_exempt\n  to   = fw_nat_rule.ra_vpn_nat_exemption\n}"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      ["moved {", "moved{", "moved block"],
+      ["from = fw_nat_rule.vpn_exempt", "to = fw_nat_rule.ra_vpn_nat_exemption", "from = ", "to = "]
+    ],
+    "min_matches": 2,
+    "explanation": "A moved block declares the rename in code so state follows the new address and the plan is a no-op: moved { from = fw_nat_rule.vpn_exempt  to = fw_nat_rule.ra_vpn_nat_exemption }. ('terraform state mv' achieves the same but outside code review.)"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "networking-dhcp-001",
+  "title": "What Is DHCP?",
+  "category": "networking",
+  "track": "DHCP",
+  "order": 1,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "DHCP (Dynamic Host Configuration Protocol) automatically hands out IP addresses and other network settings (subnet mask, default gateway, DNS servers) to devices when they join a network, so nobody has to configure every laptop and phone by hand.",
+    "example": "A laptop joins the office Wi-Fi and broadcasts 'DHCPDISCOVER — does anyone have an IP for me?'. A DHCP server replies with an offer, e.g. 10.20.1.55/24, gateway 10.20.1.1, DNS 10.20.1.10. The laptop accepts it and starts using that address, on lease for a limited time before it must renew.\n\nA Cisco IOS router configured as that DHCP server would define the pool like this:\nip dhcp pool OFFICE-WIFI\n network 10.20.1.0 255.255.255.0\n default-router 10.20.1.1\n dns-server 10.20.1.10"
+  },
+  "check": {
+    "statement": "Fill in the blank: the four-step DHCP exchange is often remembered by the acronym D-O-R-A, standing for Discover, Offer, Request, and ____."
+  },
+  "solution": {
+    "acceptable_answers": ["acknowledge", "acknowledgement", "ack"],
+    "explanation": "DORA = Discover (client asks), Offer (server proposes an address), Request (client asks to use it), Acknowledge (server confirms the lease)."
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "restapi-device-health-001",
+  "title": "Extract Device Health From an API Response",
+  "track": "REST API",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "mcq",
+  "choices": [
+    "response.json()['data']['health']['cpu_percent']",
+    "response['health'].cpu_percent",
+    "response.json().health.cpu_percent",
+    "response.text['data']['cpu_percent']"
+  ],
+  "problem": {
+    "statement": "A monitoring controller's REST API returns the JSON payload shown below for GET /devices/{id}/health. Which expression correctly reads the CPU utilization from the `requests` Response object `response`?",
+    "code_context": "{\n  \"data\": {\n    \"device_id\": \"sw-access-12\",\n    \"health\": {\n      \"cpu_percent\": 87,\n      \"memory_percent\": 62,\n      \"temperature_c\": 41\n    }\n  }\n}",
+    "use_case": "Automation scripts that poll a controller's health API to trigger alerts before a device runs out of CPU/memory headroom need to correctly parse nested JSON — a wrong key path silently returns None and the alert never fires."
+  },
+  "hints": [
+    "requests.Response objects need .json() called to get a Python dict — you can't index the Response object directly.",
+    "Once you have the dict, follow the nesting shown in the payload: data -> health -> cpu_percent.",
+    "response.json()['data']['health']['cpu_percent']"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "response.json()['data']['health']['cpu_percent']"
+    ],
+    "explanation": "You must call .json() on the Response object first to get a dict, then index through the nested structure: response.json()['data']['health']['cpu_percent']."
+  }
+}

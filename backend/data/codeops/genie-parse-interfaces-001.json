@@ -1,0 +1,26 @@
+{
+  "id": "genie-parse-interfaces-001",
+  "title": "Find Down Interfaces in Genie-Parsed Output",
+  "track": "Python",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "pyATS/Genie (Cisco's open-source test automation framework) can parse raw 'show' command text into structured Python dicts. Calling device.parse(\"show ip interface brief\") returns the dict shown below. Fill in the missing line that builds a list of interface names where either 'status' or 'protocol' is not 'up'.",
+    "code_context": "parsed = device.parse(\"show ip interface brief\")\n# parsed = {\n#   \"interface\": {\n#     \"GigabitEthernet0/0\": {\"ip_address\": \"10.1.1.1\", \"status\": \"up\", \"protocol\": \"up\"},\n#     \"GigabitEthernet0/1\": {\"ip_address\": \"unassigned\", \"status\": \"administratively down\", \"protocol\": \"down\"},\n#     \"GigabitEthernet0/2\": {\"ip_address\": \"10.1.1.2\", \"status\": \"up\", \"protocol\": \"down\"}\n#   }\n# }\n\ndown_interfaces = ____\n# Expected: ['GigabitEthernet0/1', 'GigabitEthernet0/2']",
+    "use_case": "Genie's parsers turn hundreds of Cisco 'show' command formats into consistent, well-tested dict schemas, so automation scripts don't have to hand-write regex against raw CLI text — this is the real building block NOC teams use to turn pyATS test results into health-check alerts across a fleet of Cisco devices."
+  },
+  "hints": [
+    "The interfaces are nested one level down, under parsed['interface'].",
+    "A dict is 'down' if either its 'status' or its 'protocol' value isn't 'up' — check both.",
+    "[name for name, data in parsed['interface'].items() if data['status'] != 'up' or data['protocol'] != 'up']"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "[name for name, data in parsed['interface'].items() if data['status'] != 'up' or data['protocol'] != 'up']",
+      "for name, data in parsed['interface'].items() if data['status'] != 'up' or data['protocol'] != 'up'"
+    ],
+    "explanation": "Genie nests interfaces under the 'interface' key, so you iterate parsed['interface'].items() and keep any interface whose status or protocol isn't 'up': [name for name, data in parsed['interface'].items() if data['status'] != 'up' or data['protocol'] != 'up']."
+  }
+}

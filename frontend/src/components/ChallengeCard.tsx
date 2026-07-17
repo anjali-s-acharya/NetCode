@@ -6,7 +6,7 @@ export function ChallengeCard({ challenge }: { challenge: ChallengeSummary }) {
   const solved = isSolved(challenge.id);
 
   return (
-    <Link to={`/challenges/${challenge.id}`} className={`challenge-card ${solved ? "solved" : ""}`}>
+    <Link to={`/netcode/challenges/${challenge.id}`} className={`challenge-card ${solved ? "solved" : ""}`}>
       <div className="challenge-card-header">
         <span className={`badge difficulty-${challenge.difficulty.toLowerCase()}`}>
           {challenge.difficulty}

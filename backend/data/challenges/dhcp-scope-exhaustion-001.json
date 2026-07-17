@@ -10,7 +10,7 @@
     "priority": "Medium"
   },
   "topology": {
-    "description": "The conference center BYOD network (VLAN 50, 10.50.4.0/24) is served by a central DHCP server dhcp-01 (10.1.1.5) via IP helper on the floor's L3 switch sw-3f-core. The scope for VLAN 50 was originally sized for a small huddle room and has not been resized since the conference center was expanded to seat 200 people.",
+    "description": "The conference center BYOD network (VLAN 50, 10.50.4.0/24) is served by a Cisco IOS router dhcp-01 (10.1.1.5) configured as the DHCP server via IP helper on the floor's L3 switch sw-3f-core. The 'ip dhcp pool BYOD-VLAN50' on dhcp-01 was originally sized for a small huddle room and has not been resized since the conference center was expanded to seat 200 people.",
     "nodes": [
       { "id": "client-byod", "label": "BYOD Clients (VLAN 50, 10.50.4.0/24)", "type": "client" },
       { "id": "sw-3f-core", "label": "sw-3f-core (10.50.4.1)", "type": "switch" },
@@ -30,18 +30,18 @@
   "cli_outputs": [
     {
       "device": "dhcp-01",
-      "command": "show scope 10.50.4.0/24 statistics",
-      "output": "Scope: 10.50.4.0/24 (BYOD-VLAN-50)\nAddress range: 10.50.4.10 - 10.50.4.30 (21 usable addresses)\nAddresses leased: 21/21 (100%)\nAddresses available: 0\nDefault lease time: 24 hours\nPending offers: 14"
+      "command": "show ip dhcp pool BYOD-VLAN50",
+      "output": "Pool BYOD-VLAN50 :\n Utilization mark (high/low)    : 100 / 0\n Subnet size (first/last)       : 0 / 0\n Total addresses                : 21\n Leased addresses               : 21\n Excluded addresses             : 4\n Pending event                  : none\n 1 subnet is currently in the pool :\n Current index        IP address range                    Leased addresses\n 10.50.4.31            10.50.4.10        - 10.50.4.30              21"
     },
     {
       "device": "dhcp-01",
-      "command": "show scope 10.50.4.0/24 leases | wc -l",
-      "output": "21"
+      "command": "show ip dhcp binding | include 10.50.4",
+      "output": "10.50.4.10      0063.6973.636f.2e34.3236   Jul 14 2026 10:29 AM  Automatic       Vlan50\n10.50.4.11      0063.6973.636f.2e34.3237   Jul 14 2026 10:29 AM  Automatic       Vlan50\n... (21 total bindings, all addresses in range leased)"
     },
     {
-      "device": "sw-3f-core",
-      "command": "show ip dhcp relay statistics vlan 50",
-      "output": "VLAN 50 relay agent (ip helper-address 10.1.1.5)\nDHCPDISCOVER forwarded: 187\nDHCPOFFER relayed to clients: 21\nDHCPNAK relayed to clients: 166"
+      "device": "dhcp-01",
+      "command": "show ip dhcp server statistics",
+      "output": "Message              Received\nDHCPDISCOVER               187\n\nMessage                  Sent\nDHCPOFFER                    21\nDHCPACK                      21\nDHCPNAK                     166"
     }
   ],
   "monitoring": {
@@ -50,7 +50,7 @@
   },
   "hints": [
     "Confirm the DHCP relay/helper path is actually working before assuming it's a relay problem — check whether discovers are reaching the DHCP server at all.",
-    "Look at the scope statistics on dhcp-01 for VLAN 50 specifically, not just overall server health.",
+    "Look at 'show ip dhcp pool BYOD-VLAN50' on dhcp-01 for VLAN 50 specifically, not just overall server health.",
     "The scope 10.50.4.0/24 only has 21 usable addresses (10.50.4.10-10.50.4.30) and all 21 are leased — the pool was sized for a small huddle room, not a 200-person conference."
   ],
   "solution": {

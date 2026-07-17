@@ -1,0 +1,64 @@
+{
+  "id": "automation-netmiko-wrong-targets-001",
+  "title": "Banner Change Script Touched the Wrong Routers",
+  "track": "Automation",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "A Netmiko script meant to update the login banner on the lab routers (hostnames lab-rtr-*) also rewrote the banner on three production core routers during the 12:00 run. No outage, but change management flagged unauthorized production changes and wants the root cause before the script is allowed to run again.",
+    "reportedBy": "Change Advisory Board",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "An inventory file lists every router in the company (production core, branch, and lab). The banner script filters the inventory by hostname to select lab devices only, then pushes 'banner login' config via Netmiko to each selected device.",
+    "nodes": [
+      { "id": "runner", "label": "automation-runner (script host)", "type": "server" },
+      { "id": "lab", "label": "lab-rtr-01..06", "type": "router" },
+      { "id": "core", "label": "core-rtr-lab1..3 (PRODUCTION)", "type": "router" }
+    ],
+    "links": [
+      { "from": "runner", "to": "lab", "label": "SSH (intended)" },
+      { "from": "runner", "to": "core", "label": "SSH (unintended!)" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "script run log (12:00)",
+      "content": "12:00:01 selected 9 devices from inventory\n12:00:04 lab-rtr-01: banner updated OK\n12:00:07 lab-rtr-02: banner updated OK\n...\n12:00:19 core-rtr-lab1: banner updated OK\n12:00:22 core-rtr-lab2: banner updated OK\n12:00:25 core-rtr-lab3: banner updated OK"
+    },
+    {
+      "source": "core-rtr-lab1 syslog",
+      "content": "Jul 17 12:00:19: %PARSER-5-CFGLOG_LOGGEDCMD: user svc-netmiko logged command: banner login ..."
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "automation-runner",
+      "command": "cat update_banner.py (selection excerpt)",
+      "output": "targets = [d for d in inventory if \"lab\" in d[\"hostname\"]]\nprint(f\"selected {len(targets)} devices from inventory\")\nfor device in targets:\n    conn = ConnectHandler(**device)\n    conn.send_config_set(BANNER_CMDS)\n    conn.disconnect()"
+    },
+    {
+      "device": "automation-runner",
+      "command": "grep lab inventory.yaml",
+      "output": "- hostname: lab-rtr-01\n- hostname: lab-rtr-02\n- hostname: lab-rtr-03\n- hostname: lab-rtr-04\n- hostname: lab-rtr-05\n- hostname: lab-rtr-06\n- hostname: core-rtr-lab1   # 'lab' = LABrador datacenter site code\n- hostname: core-rtr-lab2\n- hostname: core-rtr-lab3"
+    }
+  ],
+  "monitoring": {
+    "metric": "config_change_events_by_source",
+    "notes": "Config-change audit shows 9 devices modified by svc-netmiko at 12:00 — six lab-rtr-* devices (expected) and three core-rtr-lab* production routers (unexpected). The production routers' hostnames contain the substring 'lab' because 'lab' is also the site code for the LABrador datacenter, which the script's substring filter cannot distinguish from the lab role prefix."
+  },
+  "hints": [
+    "The script selected 9 devices but only 6 lab routers exist — look at how the script decides which inventory entries are 'lab' devices.",
+    "The filter is 'if \"lab\" in d[\"hostname\"]' — a substring match. Check the production hostnames it also matched.",
+    "core-rtr-lab1..3 contain the substring 'lab' (the LABrador site code), so the loose substring filter selected them. Match on the hostname prefix ('startswith(\"lab-rtr-\")') or, better, filter on an explicit role/site field in the inventory instead of the name."
+  ],
+  "solution": {
+    "root_cause": "The script selects targets with a substring filter — 'if \"lab\" in d[\"hostname\"]' — which matches not only the six lab-rtr-* devices but also the three production core routers core-rtr-lab1..3, whose hostnames contain 'lab' as the LABrador datacenter site code. All nine matched devices received the banner push.",
+    "fix": "Tighten the selection to an unambiguous criterion: hostname.startswith('lab-rtr-'), or better, filter on a dedicated role/site attribute in the inventory (e.g. role == 'lab') rather than substring-matching names; add a dry-run mode that prints the target list for approval before pushing config.",
+    "acceptable_answers": [
+      ["substring", "\"lab\" in", "'lab' in", "loose filter", "loose match", "site code", "core-rtr-lab", "matches production", "also matched"],
+      ["startswith", "prefix", "role field", "role attribute", "explicit role", "dry-run", "dry run", "tighten"]
+    ],
+    "min_matches": 2
+  }
+}

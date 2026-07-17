@@ -1,0 +1,30 @@
+{
+  "id": "ansible-ntp-playbook-001",
+  "title": "Correct Playbook Task to Configure NTP on Multiple Switches",
+  "track": "Ansible",
+  "difficulty": "Hard",
+  "points": 350,
+  "question_type": "mcq",
+  "choices": [
+    "- name: Configure NTP server\n  ios_config:\n    lines:\n      - ntp server 10.0.0.100",
+    "- name: Configure NTP server\n  shell: ssh switch 'ntp server 10.0.0.100'",
+    "- name: Configure NTP server\n  copy:\n    src: ntp server 10.0.0.100\n    dest: /running-config",
+    "- name: Configure NTP server\n  debug:\n    msg: ntp server 10.0.0.100"
+  ],
+  "problem": {
+    "statement": "You need an Ansible task that idempotently pushes an NTP server configuration line to a group of Cisco IOS switches using the standard `cisco.ios` collection module, so re-running the playbook doesn't cause unnecessary changes or errors. Which task is correct?",
+    "code_context": "",
+    "use_case": "NTP consistency across switches is critical for accurate syslog timestamps during incident investigation — Ansible playbooks are the standard way network teams push this kind of config change to dozens of devices at once, safely and repeatably."
+  },
+  "hints": [
+    "Rule out options that don't actually push config through a network-aware module (shell/copy/debug won't reliably or idempotently configure IOS).",
+    "The cisco.ios collection provides a module specifically for pushing IOS config lines idempotently.",
+    "ios_config with a 'lines' list containing 'ntp server 10.0.0.100' is the standard, idempotent way to do this."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "- name: Configure NTP server\n  ios_config:\n    lines:\n      - ntp server 10.0.0.100"
+    ],
+    "explanation": "The ios_config module (from the cisco.ios collection) is built to push IOS config lines idempotently — it checks the running config first and only applies the change if the line isn't already present, unlike shell/copy/debug which either bypass IOS config mode or don't touch the device at all."
+  }
+}

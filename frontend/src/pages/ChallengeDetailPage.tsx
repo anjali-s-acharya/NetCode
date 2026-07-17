@@ -26,7 +26,7 @@ export function ChallengeDetailPage() {
 
   return (
     <div>
-      <Link to="/" className="back-link">
+      <Link to="/netcode" className="back-link">
         ← All challenges
       </Link>
       <div className="challenge-detail-header">

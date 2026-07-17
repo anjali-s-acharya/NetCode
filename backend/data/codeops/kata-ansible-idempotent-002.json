@@ -1,0 +1,30 @@
+{
+  "id": "kata-ansible-idempotent-002",
+  "title": "Kata: Pick the Idempotent NTP Task",
+  "track": "Ansible",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "mcq",
+  "choices": [
+    "- name: set NTP server\n  cisco.ios.ios_config:\n    lines:\n      - ntp server 10.0.0.100",
+    "- name: set NTP server\n  ansible.builtin.shell: |\n    ssh {{ inventory_hostname }} \"conf t; ntp server 10.0.0.100\"",
+    "- name: set NTP server\n  ansible.builtin.raw: conf t ; ntp server 10.0.0.100",
+    "- name: set NTP server\n  cisco.ios.ios_command:\n    commands:\n      - configure terminal\n      - ntp server 10.0.0.100"
+  ],
+  "problem": {
+    "statement": "Idempotency means running the playbook twice leaves the device unchanged the second time (recap shows changed=0). Which of these four tasks configures 'ntp server 10.0.0.100' on Cisco IOS devices idempotently?",
+    "code_context": "",
+    "use_case": "Non-idempotent tasks make every scheduled run report 'changed', flooding change audits and hiding real drift; worse, ios_command with config commands can error or leave sessions in config mode. Network modules that compare against the running config are what make nightly compliance runs safe."
+  },
+  "hints": [
+    "shell/raw bypass Ansible's state comparison entirely — they run every time and always report changed.",
+    "ios_command is for exec-mode show/exec commands, not configuration — it doesn't diff against running config.",
+    "cisco.ios.ios_config checks the running config first and only pushes lines that are missing — that's the idempotent choice."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "- name: set ntp server\n  cisco.ios.ios_config:\n    lines:\n      - ntp server 10.0.0.100"
+    ],
+    "explanation": "cisco.ios.ios_config diffs the declared lines against the device's running config and pushes only what's missing — a second run makes no changes (changed=0). shell and raw always execute (never idempotent), and ios_command is for exec-mode commands, not configuration."
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "id": "sdwan-mtu-blackhole-003",
+  "title": "File Transfers Hang Between Branch 3 and DC, Pings Fine",
+  "track": "SD-WAN",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "Since the ISP 'upgraded' Branch 3's broadband circuit on Monday, users there can ping and browse small pages at the DC, but anything bulky hangs: SMB file copies stall at 0%, the ERP client freezes on large screens, HTTPS downloads start then die. Voice is fine. The MPLS transport at the branch was decommissioned last month, so everything rides the internet tunnel.",
+    "reportedBy": "Branch 3 IT Liaison",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "cedge-br03 now has a single internet transport to the DC edge (cedge-dc1) via an IPsec tunnel. The ISP's circuit change introduced a PPPoE handoff, lowering the usable interface MTU on the WAN link from 1500 to 1492. IPsec/GRE overhead further reduces the effective tunnel payload. Path-MTU discovery relies on ICMP 'fragmentation needed' messages, which the ISP's new edge silently drops.",
+    "nodes": [
+      { "id": "clients-br03", "label": "Branch 3 Clients", "type": "client" },
+      { "id": "cedge-br03", "label": "cedge-br03", "type": "router" },
+      { "id": "cedge-dc1", "label": "cedge-dc1 (DC)", "type": "router" },
+      { "id": "fileserver", "label": "DC File/ERP servers", "type": "server" }
+    ],
+    "links": [
+      { "from": "clients-br03", "to": "cedge-br03", "label": "LAN, MTU 1500" },
+      { "from": "cedge-br03", "to": "cedge-dc1", "label": "IPsec tunnel over PPPoE internet (WAN MTU 1492)" },
+      { "from": "cedge-dc1", "to": "fileserver", "label": "DC LAN" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "helpdesk ticket notes",
+      "content": "Mon 14:20 user: 'copy of 300MB folder to \\\\dc-files freezes at 0 bytes'\nMon 14:31 user: 'ping dc-files works fine, 24ms'\nMon 15:02 IT: small test file (2KB) copies OK; 200KB file hangs\nMon 15:10 IT: same behavior on ERP - login OK, large report screen freezes"
+    },
+    {
+      "source": "cedge-br03 syslog",
+      "content": "Jul 14 09:02:11: %DIALER-6-BIND: Interface Di1 bound to profile ISP-PPPOE\nJul 14 09:02:12: %LINK-3-UPDOWN: Interface Virtual-Access2, changed state to up\nJul 14 09:02:12: PPPoE session established, MRU negotiated 1492"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "cedge-br03",
+      "command": "show sdwan bfd sessions",
+      "output": "SYSTEM IP   SITE ID  STATE  COLOR         SOURCE IP      DST PUBLIC IP   TX/RX\n1.1.0.99    99       up     biz-internet  198.51.100.30  203.0.113.40    1000/1000\n(session up, uptime 3d)"
+    },
+    {
+      "device": "cedge-br03",
+      "command": "ping 10.0.5.10 size 1400 df-bit",
+      "output": "Type escape sequence to abort.\nSending 5, 1400-byte ICMP Echos to 10.0.5.10 with the DF bit set\n!!!!!\nSuccess rate is 100 percent (5/5)"
+    },
+    {
+      "device": "cedge-br03",
+      "command": "ping 10.0.5.10 size 1450 df-bit",
+      "output": "Type escape sequence to abort.\nSending 5, 1450-byte ICMP Echos to 10.0.5.10 with the DF bit set\n.....\nSuccess rate is 0 percent (0/5)"
+    },
+    {
+      "device": "cedge-br03",
+      "command": "show interface Virtual-Access2 | include MTU",
+      "output": "MTU 1492 bytes (PPPoE)"
+    },
+    {
+      "device": "cedge-br03",
+      "command": "show sdwan running-config | include tcp-mss",
+      "output": "(no output - tcp-mss-adjust not configured)"
+    }
+  ],
+  "monitoring": {
+    "metric": "flow_completion_by_size_br03",
+    "notes": "Flow records since Monday show Branch 3 <-> DC flows under ~1.4KB payload completing normally while flows with full-size (1500-byte) packets stall after the handshake and retransmit until timing out — the signature of an MTU blackhole. The df-bit ping sweep brackets the working ceiling between 1400 and 1450 bytes. No ICMP type-3 code-4 (fragmentation-needed) messages are being received from the ISP path, so client PMTUD never learns the smaller MTU."
+  },
+  "hints": [
+    "Small packets (pings, tiny files) work while large transfers hang after connecting — that pattern is a path-MTU problem, not routing or policy. Confirm with df-bit pings of increasing size.",
+    "The circuit change added PPPoE (MRU 1492) and the tunnel adds IPsec overhead on top; check whether anything on the edge clamps TCP MSS, and whether ICMP frag-needed is making it back to clients.",
+    "The effective tunnel MTU dropped below 1500 (PPPoE 1492 minus IPsec overhead) and the ISP drops ICMP fragmentation-needed, so PMTUD is broken and full-size TCP segments blackhole. Configure TCP MSS clamping (e.g. 'tcp-mss-adjust 1350' on the service-side/tunnel interface) so sessions never emit oversized segments."
+  ],
+  "solution": {
+    "root_cause": "Monday's circuit change put the WAN link behind PPPoE (MTU/MRU 1492); with IPsec tunnel overhead the effective path MTU to the DC is well under 1500, bracketed between 1400 and 1450 by the df-bit ping sweep. The ISP's new edge silently drops ICMP fragmentation-needed messages, so path-MTU discovery is broken: full-size TCP segments from clients are blackholed after the handshake, which is why pings and tiny transfers succeed while bulk transfers hang. No TCP MSS clamping is configured on the edge to compensate.",
+    "fix": "Configure TCP MSS clamping on cedge-br03 (e.g. tcp-mss-adjust ~1350 on the service-side VPN/tunnel interface, and correspondingly at the DC edge) so TCP sessions negotiate segments that fit the reduced path MTU; optionally also lower the tunnel MTU explicitly. Then re-test with a large transfer and the 1450-byte df-bit ping.",
+    "acceptable_answers": [
+      ["mtu", "path mtu", "pmtud", "blackhole", "fragmentation", "frag-needed", "1492", "pppoe overhead", "ipsec overhead", "oversized"],
+      ["mss", "tcp-mss-adjust", "mss clamp", "clamping", "lower the tunnel mtu", "tcp adjust-mss"]
+    ],
+    "min_matches": 2
+  }
+}

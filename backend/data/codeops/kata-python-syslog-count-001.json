@@ -1,0 +1,36 @@
+{
+  "id": "kata-python-syslog-count-001",
+  "title": "Kata: Count Syslog Messages by Severity",
+  "track": "Python",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "Each Cisco syslog line contains a facility-severity-mnemonic code like %LINK-3-UPDOWN, where the number is the severity. Fill in the missing line that extracts the severity digit from each line and tallies counts per severity using the Counter started above.",
+    "code_context": "import re\nfrom collections import Counter\n\nlines = [\n    \"%LINK-3-UPDOWN: Interface Gi0/1, changed state to down\",\n    \"%LINEPROTO-5-UPDOWN: Line protocol on Interface Gi0/1, changed state to down\",\n    \"%LINK-3-UPDOWN: Interface Gi0/2, changed state to down\",\n]\n\nseverity_counts = Counter()\nfor line in lines:\n    ____\n# Expected: Counter({'3': 2, '5': 1})",
+    "use_case": "Summarizing a night's syslog by severity is the first step of most triage scripts — a spike of severity-3 LINK messages points at flapping interfaces before anyone reads a single full line."
+  },
+  "hints": [
+    "The severity is the digits between the two hyphens in the %FACILITY-SEV-MNEMONIC token — a regex like r'%\\w+-(\\d)-' captures it.",
+    "Use re.search(...) on the line, then increment the Counter with the captured group.",
+    "severity_counts[re.search(r'%\\w+-(\\d)-', line).group(1)] += 1"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      [
+        "severity_counts[re.search(r'%\\w+-(\\d)-', line).group(1)] += 1",
+        "re.search(r'%\\w+-(\\d)-', line)",
+        ".group(1)] += 1",
+        "group(1)"
+      ],
+      [
+        "severity_counts[",
+        "+= 1",
+        "counter"
+      ]
+    ],
+    "min_matches": 2,
+    "explanation": "A regex captures the severity digit between the hyphens — re.search(r'%\\w+-(\\d)-', line).group(1) — and Counter's [key] += 1 tallies it: severity_counts[re.search(r'%\\w+-(\\d)-', line).group(1)] += 1."
+  }
+}

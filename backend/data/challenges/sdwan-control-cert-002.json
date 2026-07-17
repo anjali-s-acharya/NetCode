@@ -1,0 +1,76 @@
+{
+  "id": "sdwan-control-cert-002",
+  "title": "Branch 7 Edge Dropped Off the Overlay Overnight",
+  "track": "SD-WAN",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "cedge-br07 disappeared from the SD-WAN overlay at 00:14 last night — vManage shows it offline, all its BFD sessions are gone, and Branch 7 has no WAN connectivity to other sites (local internet breakout still works). No config changes were pushed. The device is reachable via its out-of-band console.",
+    "reportedBy": "NOC (overlay down alert)",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "cedge-br07 forms DTLS control connections to the vBond orchestrator, vManage, and two vSmart controllers, and data-plane BFD/IPsec tunnels to other sites. Control-plane authentication uses certificates: each edge presents its device certificate and validates the controllers' certificates. Without valid control connections to vSmart, no OMP routes and no data-plane tunnels.",
+    "nodes": [
+      { "id": "cedge-br07", "label": "cedge-br07 (Branch 7)", "type": "router" },
+      { "id": "vbond", "label": "vBond", "type": "server" },
+      { "id": "vsmart", "label": "vSmart x2", "type": "server" },
+      { "id": "vmanage", "label": "vManage", "type": "server" }
+    ],
+    "links": [
+      { "from": "cedge-br07", "to": "vbond", "label": "DTLS control" },
+      { "from": "cedge-br07", "to": "vsmart", "label": "DTLS control + OMP" },
+      { "from": "cedge-br07", "to": "vmanage", "label": "management" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "cedge-br07 syslog (via console)",
+      "content": "Jul 17 00:14:02: %Cisco-SDWAN-RP_0-CFGMGR-4-WARN: control connection to vsmart 10.255.0.11 went down, reason CRTVERFL\nJul 17 00:14:02: %Cisco-SDWAN-RP_0-CFGMGR-4-WARN: control connection to vsmart 10.255.0.12 went down, reason CRTVERFL\nJul 17 00:14:31: %Cisco-SDWAN-RP_0-CFGMGR-4-WARN: control connection attempt to vbond failed, reason CRTVERFL"
+    },
+    {
+      "source": "vManage events",
+      "content": "2026-07-17 00:14:05 control-connection-down system-ip 1.1.0.7 (cedge-br07) reason CRTVERFL\n2026-07-17 00:14:40 device cedge-br07 state: offline"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "cedge-br07",
+      "command": "show sdwan control connections",
+      "output": "PEER    PEER            SITE  DOMAIN PEER          PRIV  PEER          PUB\nTYPE    PROT SYSTEM IP  ID    ID     PRIVATE IP    PORT  PUBLIC IP     PORT  STATE\n----------------------------------------------------------------------------------\n(no entries)"
+    },
+    {
+      "device": "cedge-br07",
+      "command": "show sdwan control connection-history",
+      "output": "PEER     PEER        LOCAL      REMOTE\nTYPE     SYSTEM IP   ERROR      ERROR      DOWNTIME\n---------------------------------------------------\nvsmart   10.255.0.11 CRTVERFL   NOERR      2026-07-17T00:14:02\nvsmart   10.255.0.12 CRTVERFL   NOERR      2026-07-17T00:14:02\nvbond    -           CRTVERFL   NOERR      2026-07-17T00:14:31"
+    },
+    {
+      "device": "cedge-br07",
+      "command": "show sdwan certificate installed | include Valid",
+      "output": "Certificate 1 (device cert):\n  Validity: Not Before: Jul 16 2025 00:14 GMT, Not After: Jul 17 2026 00:14 GMT  <- EXPIRED\nRoot CA:\n  Validity: Not After: 2035-01-01"
+    },
+    {
+      "device": "cedge-br07",
+      "command": "show clock",
+      "output": "08:30:12.201 GMT Thu Jul 17 2026"
+    }
+  ],
+  "monitoring": {
+    "metric": "overlay_control_connections_br07",
+    "notes": "Control-connection count for cedge-br07 went 4 -> 0 at exactly 00:14 GMT with local error CRTVERFL (certificate verification failure) on every attempt since. The device certificate's Not-After timestamp is Jul 17 2026 00:14 GMT — the precise minute the connections dropped. No other device in the fleet has a certificate expiring this quarter; br07 was the pilot device enrolled a year earlier than the rest."
+  },
+  "hints": [
+    "All control connections dropped at the same instant with local error CRTVERFL in the connection history — look up what that error code means before suspecting transport or config.",
+    "Compare the device certificate validity window ('show sdwan certificate installed') against the exact time the connections dropped and the current clock.",
+    "The device certificate expired at Jul 17 00:14 GMT — the exact drop time. CRTVERFL = certificate verification failure. Renew/re-enroll the device certificate (and set expiry alerting) to restore control connections."
+  ],
+  "solution": {
+    "root_cause": "cedge-br07's device certificate expired at Jul 17 2026 00:14 GMT — the exact moment all DTLS control connections dropped with error CRTVERFL (certificate verification failure). With no valid certificate, the edge cannot authenticate to vBond/vSmart, receives no OMP routes, and all data-plane tunnels are torn down. The device was the pilot unit enrolled a year before the rest of the fleet, so it expired alone.",
+    "fix": "Renew the device certificate (re-enroll via vManage / the CA used for enrollment) on cedge-br07 through the out-of-band path, confirm control connections re-establish and BFD sessions return, then add certificate-expiry monitoring/alerts for the whole overlay.",
+    "acceptable_answers": [
+      ["certificate expired", "expired certificate", "cert expired", "certificate expiry", "crtverfl", "certificate verification"],
+      ["renew", "re-enroll", "reenroll", "new certificate", "00:14", "device certificate"]
+    ],
+    "min_matches": 2
+  }
+}

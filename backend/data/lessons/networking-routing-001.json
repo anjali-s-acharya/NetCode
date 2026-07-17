@@ -1,0 +1,26 @@
+{
+  "id": "networking-routing-001",
+  "title": "What Is a Routing Table?",
+  "category": "networking",
+  "track": "Routing",
+  "order": 1,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "The most specific matching route (longest prefix match)",
+    "The first route listed in the table, top to bottom",
+    "Whichever route was added most recently",
+    "The route with the shortest prefix (fewest bits)"
+  ],
+  "content": {
+    "explanation": "A router forwards packets using a routing table — a list of destination networks and the 'next hop' to reach each one. When a packet arrives, the router compares its destination address against every entry in the table to decide where to send it next.",
+    "example": "A routing table might contain both 10.0.0.0/8 (next hop A) and 10.20.1.0/24 (next hop B). A packet destined for 10.20.1.55 matches both entries, but the router picks the /24 route because it's the more specific match — this is called 'longest prefix match'.\n\nOn a Cisco IOS router, 'show ip route' would show both entries:\nD    10.0.0.0/8 [90/2170112] via 192.0.2.1\nC    10.20.1.0/24 is directly connected, GigabitEthernet0/1"
+  },
+  "check": {
+    "statement": "When a destination address matches more than one entry in a routing table, which route does the router use?"
+  },
+  "solution": {
+    "acceptable_answers": ["the most specific matching route (longest prefix match)", "longest prefix match", "most specific route"],
+    "explanation": "Routers always prefer the most specific (longest prefix) matching route, regardless of table order or when it was added — this is called longest prefix match."
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "id": "automation-ansible-vlan-replace-002",
+  "title": "Half the Campus Lost Connectivity After a 'Simple VLAN Add' Playbook",
+  "track": "Automation",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "At 17:30 an engineer ran an Ansible playbook to add new VLAN 250 to the trunk uplinks on all 14 access switches. Immediately afterwards, users on VLANs 20, 40, and 150 across the campus lost connectivity; only VLAN 250 (empty, brand new) works on the uplinks. The playbook output showed all green 'changed' with no errors.",
+    "reportedBy": "NOC (mass user-down alerts)",
+    "priority": "Critical"
+  },
+  "topology": {
+    "description": "Each access switch uplinks to the distribution pair over a trunk that should carry VLANs 20,40,150,99 (and now 250). The playbook uses cisco.ios.ios_l2_interfaces to configure 'trunk allowed vlans' on each uplink. The module's default state is 'merged', but the playbook was written with 'state: replaced'.",
+    "nodes": [
+      { "id": "acc", "label": "sw-acc-01..14 (access)", "type": "switch" },
+      { "id": "dist", "label": "dist-sw pair", "type": "switch" }
+    ],
+    "links": [
+      { "from": "acc", "to": "dist", "label": "trunk uplinks (should allow 20,40,150,99,250)" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "ansible run output (17:30)",
+      "content": "TASK [add vlan 250 to uplink trunks] *******************************\nchanged: [sw-acc-01]\nchanged: [sw-acc-02]\n... (all 14 changed)\nPLAY RECAP: ok=14 changed=14 unreachable=0 failed=0"
+    },
+    {
+      "source": "sw-acc-03 syslog",
+      "content": "Jul 17 17:30:44: %PARSER-5-CFGLOG_LOGGEDCMD: user svc-ansible logged command: interface GigabitEthernet1/0/48\nJul 17 17:30:44: %PARSER-5-CFGLOG_LOGGEDCMD: user svc-ansible logged command: switchport trunk allowed vlan 250"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "automation-runner",
+      "command": "cat add_vlan_250.yml (task excerpt)",
+      "output": "- name: add vlan 250 to uplink trunks\n  cisco.ios.ios_l2_interfaces:\n    config:\n      - name: GigabitEthernet1/0/48\n        trunk:\n          allowed_vlans: 250\n    state: replaced"
+    },
+    {
+      "device": "sw-acc-03",
+      "command": "show interfaces trunk",
+      "output": "Port        Mode         Encapsulation  Status        Native vlan\nGi1/0/48    on           802.1q         trunking      99\n\nPort        Vlans allowed on trunk\nGi1/0/48    250"
+    },
+    {
+      "device": "sw-acc-03",
+      "command": "show running-config interface GigabitEthernet1/0/48",
+      "output": "interface GigabitEthernet1/0/48\n description UPLINK-DIST\n switchport mode trunk\n switchport trunk native vlan 99\n switchport trunk allowed vlan 250\nend"
+    }
+  ],
+  "monitoring": {
+    "metric": "trunk_allowed_vlan_audit",
+    "notes": "The nightly trunk audit's diff against yesterday shows every access uplink's allowed-VLAN list collapsing from '20,40,99,150' to just '250' at 17:30 — the exact playbook run time. The playbook task used state: replaced, which makes the declared config the complete intended state: any VLAN not listed is removed. With only 250 declared, the module faithfully stripped the four production VLANs from all 14 trunks."
+  },
+  "hints": [
+    "The playbook 'worked' (all green) but the trunks now allow only VLAN 250 — compare the intended change (add one VLAN) with what the module state parameter actually does.",
+    "Look at 'state: replaced' in the ios_l2_interfaces task and what 'replaced' semantics mean for the allowed_vlans list.",
+    "state: replaced makes the declared config authoritative — allowed_vlans: 250 REPLACED the whole list instead of adding to it. Use state: merged to add, and restore the trunks to 20,40,99,150,250."
+  ],
+  "solution": {
+    "root_cause": "The playbook task used cisco.ios.ios_l2_interfaces with state: replaced and only VLAN 250 in allowed_vlans. 'replaced' semantics treat the declared config as the complete intended state, so the module removed VLANs 20, 40, 99, and 150 from every uplink trunk and left only 250 — exactly what the audit diff shows. The intended operation (add one VLAN) required 'merged' semantics.",
+    "fix": "Re-run with the full allowed list (20,40,99,150,250) to restore the trunks immediately, change the task to state: merged for additive changes, and add a check-mode/diff CI step so replaced-vs-merged mistakes are caught before hitting production.",
+    "acceptable_answers": [
+      ["state: replaced", "replaced instead of merged", "replaced the whole list", "replaced semantics", "removed the other vlans", "stripped the", "wiped the allowed", "overwrote the allowed"],
+      ["merged", "state: merged", "restore the trunks", "20,40,99,150", "add the vlans back", "check mode", "--check"]
+    ],
+    "min_matches": 2
+  }
+}

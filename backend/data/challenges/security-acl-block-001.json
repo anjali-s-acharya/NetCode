@@ -1,0 +1,69 @@
+{
+  "id": "security-acl-block-001",
+  "title": "Payroll App Unreachable After Last Night's ACL Change",
+  "track": "Security",
+  "difficulty": "Easy",
+  "points": 100,
+  "ticket": {
+    "summary": "Since this morning, users in the Finance VLAN (10.40.8.0/23) cannot reach the payroll application at 172.16.20.45 on TCP 8443 — browsers show 'connection timed out'. Everything else works. Last night the security team pushed an ACL update to core-rtr1 to block a scanning host (10.40.9.66) from reaching the server segment.",
+    "reportedBy": "Finance Team Lead",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "Finance clients (VLAN 80, 10.40.8.0/23) reach the server segment (172.16.20.0/24) through core-rtr1, which applies ACL SERVER-PROTECT inbound on the finance-facing interface. Last night's change intent was to block a single misbehaving host, 10.40.9.66, from the server segment.",
+    "nodes": [
+      { "id": "client-fin", "label": "Finance Clients (10.40.8.0/23)", "type": "client" },
+      { "id": "core-rtr1", "label": "core-rtr1 (ACL SERVER-PROTECT)", "type": "router" },
+      { "id": "payroll", "label": "payroll-app (172.16.20.45:8443)", "type": "server" }
+    ],
+    "links": [
+      { "from": "client-fin", "to": "core-rtr1", "label": "Gi0/1 (ACL SERVER-PROTECT in)" },
+      { "from": "core-rtr1", "to": "payroll", "label": "routed to 172.16.20.0/24" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "core-rtr1 archive log",
+      "content": "Jul 16 23:41:05: %ARCHIVE-5-LOG: user sec-team config change, ticket SEC-1182 (block scanner 10.40.9.66)\n+ip access-list extended SERVER-PROTECT\n+ deny ip 10.40.8.0 0.0.1.255 172.16.20.0 0.0.0.255\n+ permit ip any any"
+    },
+    {
+      "source": "core-rtr1 syslog",
+      "content": "Jul 17 08:02:11: %SEC-6-IPACCESSLOGP: list SERVER-PROTECT denied tcp 10.40.8.31(51844) -> 172.16.20.45(8443), 1 packet\nJul 17 08:02:44: %SEC-6-IPACCESSLOGP: list SERVER-PROTECT denied tcp 10.40.8.90(52011) -> 172.16.20.45(8443), 1 packet\nJul 17 08:03:19: %SEC-6-IPACCESSLOGP: list SERVER-PROTECT denied tcp 10.40.9.12(49230) -> 172.16.20.45(8443), 1 packet"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "core-rtr1",
+      "command": "show ip access-lists SERVER-PROTECT",
+      "output": "Extended IP access list SERVER-PROTECT\n    10 deny ip 10.40.8.0 0.0.1.255 172.16.20.0 0.0.0.255 (14822 matches)\n    20 permit ip any any (982133 matches)"
+    },
+    {
+      "device": "core-rtr1",
+      "command": "show running-config | include SERVER-PROTECT",
+      "output": "ip access-list extended SERVER-PROTECT\ninterface GigabitEthernet0/1\n ip access-group SERVER-PROTECT in"
+    },
+    {
+      "device": "client (10.40.8.31)",
+      "command": "Test-NetConnection 172.16.20.45 -Port 8443",
+      "output": "ComputerName     : 172.16.20.45\nRemoteAddress    : 172.16.20.45\nRemotePort       : 8443\nTcpTestSucceeded : False"
+    }
+  ],
+  "monitoring": {
+    "metric": "acl_deny_rate_server_protect",
+    "notes": "The ACL-deny counter on core-rtr1 for SERVER-PROTECT was flat at ~0/min for months, then jumped to hundreds of denies per minute starting exactly at last night's 23:41 change window. Denied sources span the entire 10.40.8.0/23 finance subnet — not just the intended scanner at 10.40.9.66 — confirming the deny entry matches far more than one host."
+  },
+  "hints": [
+    "The change intent was to block one host (10.40.9.66), but the deny log shows sources from all over 10.40.8.0/23 — compare the intent with what the ACL entry actually matches.",
+    "Look at the wildcard mask on the deny entry in 'show ip access-lists SERVER-PROTECT'.",
+    "The entry 'deny ip 10.40.8.0 0.0.1.255 ...' blocks the whole /23, not the single scanner host — it should have been 'deny ip host 10.40.9.66 172.16.20.0 0.0.0.255'."
+  ],
+  "solution": {
+    "root_cause": "Last night's ACL change (SEC-1182) added 'deny ip 10.40.8.0 0.0.1.255 172.16.20.0 0.0.0.255' to SERVER-PROTECT — a wildcard mask covering the entire finance /23 — instead of denying only the scanning host 10.40.9.66. Every finance client is now denied access to the server segment, including the payroll app at 172.16.20.45.",
+    "fix": "Replace the overly-broad deny with a host-specific entry: 'deny ip host 10.40.9.66 172.16.20.0 0.0.0.255' (followed by the existing permit), so only the scanner is blocked and finance traffic to the payroll app is restored.",
+    "acceptable_answers": [
+      ["wildcard mask", "0.0.1.255", "entire subnet", "whole /23", "too broad", "overly broad", "blocks all finance", "should be host"],
+      ["10.40.9.66", "host 10.40.9.66", "single host", "one host", "acl", "deny entry"]
+    ],
+    "min_matches": 2
+  }
+}

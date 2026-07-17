@@ -10,7 +10,7 @@
     "priority": "High"
   },
   "topology": {
-    "description": "VLAN 80 (10.40.8.0/23, usable range 10.40.8.10-10.40.9.250) is served by two DHCP servers configured as a split-scope pair for redundancy: dhcp-01 (10.1.1.5) is intended to own the lower 80% of the range and dhcp-02 (10.1.1.6) the upper 20%, per the original design from last year. The two servers do not use vendor DHCP failover replication (no shared lease database) -- redundancy is achieved purely by each server being configured with a non-overlapping address range (a manual split-scope). Both relay through ip helper-address entries on the VLAN 80 SVI pointing to both servers.",
+    "description": "VLAN 80 (10.40.8.0/23, usable range 10.40.8.10-10.40.9.250) is served by two Cisco IOS routers each configured with their own 'ip dhcp pool', set up as a split-scope pair for redundancy: dhcp-01 (10.1.1.5) is intended to own the lower 80% of the range and dhcp-02 (10.1.1.6) the upper 20%, per the original design from last year, each using 'ip dhcp excluded-address' to carve out its half. Cisco IOS DHCP pools don't replicate lease state between routers (no built-in failover/shared lease database) -- redundancy is achieved purely by each pool covering a non-overlapping address range (a manual split-scope). Both relay through ip helper-address entries on the VLAN 80 SVI pointing to both routers.",
     "nodes": [
       { "id": "client-fin", "label": "Finance Clients (VLAN 80, 10.40.8.0/23)", "type": "client" },
       { "id": "sw-fin-core", "label": "sw-fin-core (L3 SVI)", "type": "switch" },
@@ -25,12 +25,12 @@
   },
   "logs": [
     {
-      "source": "dhcp-01 service log",
-      "content": "Jul 08 03:12:04 CONFIG RELOAD: scope 10.40.8.0/23 range updated by admin 'j.arnett' via console\nJul 08 03:12:04   old range: 10.40.8.10 - 10.40.9.30\nJul 08 03:12:04   new range: 10.40.8.10 - 10.40.9.90\nJul 08 03:12:04 CHANGE COMMENT: 'expanding pool ahead of Q3 headcount growth, ticket INFRA-2290'"
+      "source": "dhcp-01 archived config diff (archive log)",
+      "content": "Jul 08 03:12:04: %ARCHIVE-5-LOG: user j.arnett config change, ticket INFRA-2290 (expanding pool ahead of Q3 headcount growth)\n-ip dhcp excluded-address 10.40.9.31 10.40.9.254\n+ip dhcp excluded-address 10.40.9.91 10.40.9.254"
     },
     {
-      "source": "dhcp-02 service log",
-      "content": "Jul 01 11:00:00 scope 10.40.8.0/23 range: 10.40.9.31 - 10.40.9.250 (unchanged, no maintenance this window)"
+      "source": "dhcp-02 running-config (unchanged)",
+      "content": "ip dhcp excluded-address 10.40.8.1 10.40.8.9\nip dhcp excluded-address 10.40.9.251 10.40.9.254\n! (no changes since initial deployment 2025-06-02)"
     },
     {
       "source": "client conflict events (aggregated, Windows Event ID 4198)",
@@ -40,18 +40,18 @@
   "cli_outputs": [
     {
       "device": "dhcp-01",
-      "command": "show scope 10.40.8.0/23 range",
-      "output": "Scope: 10.40.8.0/23 (Finance-VLAN80)\nConfigured range: 10.40.8.10 - 10.40.9.90\nLast modified: 2026-07-08 03:12:04 by j.arnett (INFRA-2290)\nFailover partner: none configured (standalone / manual split-scope)"
+      "command": "show running-config | section dhcp pool FINANCE-VLAN80",
+      "output": "ip dhcp pool FINANCE-VLAN80\n network 10.40.8.0 255.255.254.0\n default-router 10.40.8.1\n dns-server 10.0.0.60\n! excluded-address ranges (defined globally, not shown here): 10.40.8.1-10.40.8.9 and 10.40.9.91-10.40.9.254\n! effective leasable range: 10.40.8.10 - 10.40.9.90 (as of Jul 08 change, INFRA-2290)"
     },
     {
       "device": "dhcp-02",
-      "command": "show scope 10.40.8.0/23 range",
-      "output": "Scope: 10.40.8.0/23 (Finance-VLAN80)\nConfigured range: 10.40.9.31 - 10.40.9.250\nLast modified: 2025-06-02 (initial deployment)\nFailover partner: none configured (standalone / manual split-scope)"
+      "command": "show running-config | section dhcp pool FINANCE-VLAN80",
+      "output": "ip dhcp pool FINANCE-VLAN80\n network 10.40.8.0 255.255.254.0\n default-router 10.40.8.1\n dns-server 10.0.0.60\n! excluded-address ranges (defined globally, not shown here): 10.40.8.1-10.40.8.9 and 10.40.9.251-10.40.9.254\n! effective leasable range: 10.40.9.31 - 10.40.9.250 (unchanged since 2025-06-02)"
     },
     {
       "device": "dhcp-01",
-      "command": "show scope 10.40.8.0/23 conflicts",
-      "output": "Conflict detection: enabled (ping before offer)\nConflicts logged (last 7 days): 4\n  10.40.9.61 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)\n  10.40.9.45 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)\n  10.40.9.72 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)\n  10.40.9.38 -- offered by dhcp-01, already in use (leased by dhcp-02 to a different MAC)"
+      "command": "show ip dhcp conflict",
+      "output": "IP address      Detection method    Detection time\n10.40.9.61      Ping                Jul 10 2026 09:14 AM\n10.40.9.45      Ping                Jul 11 2026 02:02 PM\n10.40.9.72      Ping                Jul 12 2026 08:47 AM\n10.40.9.38      Ping                Jul 13 2026 04:20 PM"
     }
   ],
   "monitoring": {

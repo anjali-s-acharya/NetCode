@@ -1,0 +1,69 @@
+{
+  "id": "security-vpn-psk-003",
+  "title": "Site-to-Site VPN to Manufacturing Plant Down After Credential Rotation",
+  "track": "Security",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "The IPsec site-to-site tunnel between HQ (hq-vpn-rtr) and the manufacturing plant (plant-edge-rtr) has been down since 02:00. Plant systems can't reach ERP at HQ; local plant operations continue but nothing syncs. Overnight, the security team performed a scheduled quarterly credential rotation across 'all VPN devices' per policy SEC-CRED-90. The other three site tunnels came back fine.",
+    "reportedBy": "Plant IT (escalated by Operations)",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "hq-vpn-rtr (203.0.113.10) terminates four site-to-site IPsec tunnels using IKEv1 with pre-shared keys, one per remote site, each keyed under the peer's public IP via 'crypto isakmp key'. plant-edge-rtr (198.51.100.22) is the manufacturing site's peer. The rotation script updated the PSK on hq-vpn-rtr for all four peers and was supposed to update each remote router as well.",
+    "nodes": [
+      { "id": "hq-vpn-rtr", "label": "hq-vpn-rtr (203.0.113.10)", "type": "router" },
+      { "id": "plant-edge-rtr", "label": "plant-edge-rtr (198.51.100.22)", "type": "router" },
+      { "id": "erp", "label": "ERP (HQ)", "type": "server" }
+    ],
+    "links": [
+      { "from": "hq-vpn-rtr", "to": "plant-edge-rtr", "label": "IPsec site-to-site (IKEv1 PSK)" },
+      { "from": "hq-vpn-rtr", "to": "erp", "label": "HQ LAN" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "hq-vpn-rtr syslog",
+      "content": "Jul 17 02:04:18: %CRYPTO-6-IKMP_MODE_FAILURE: Processing of Main mode failed with peer at 198.51.100.22\nJul 17 02:04:18: %CRYPTO-4-IKMP_BAD_MESSAGE: IKE message from 198.51.100.22 failed its sanity check or is malformed\nJul 17 02:05:52: %CRYPTO-6-IKMP_MODE_FAILURE: Processing of Main mode failed with peer at 198.51.100.22"
+    },
+    {
+      "source": "rotation job output (ansible-vpn-rotate, 02:00 run)",
+      "content": "PLAY RECAP *********************************************************\nhq-vpn-rtr        : ok=5  changed=4  unreachable=0  failed=0\nsite-a-edge       : ok=5  changed=4  unreachable=0  failed=0\nsite-b-edge       : ok=5  changed=4  unreachable=0  failed=0\nsite-c-edge       : ok=5  changed=4  unreachable=0  failed=0\nplant-edge-rtr    : ok=0  changed=0  unreachable=1  failed=0\n[WARNING]: plant-edge-rtr was unreachable (mgmt path traverses the VPN); host skipped"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "hq-vpn-rtr",
+      "command": "show crypto isakmp sa",
+      "output": "IPv4 Crypto ISAKMP SA\ndst             src             state          conn-id status\n203.0.113.10    198.51.100.22   MM_KEY_EXCH        0    ACTIVE (deleted)\n203.0.113.10    192.0.2.61      QM_IDLE         1204    ACTIVE\n203.0.113.10    192.0.2.94      QM_IDLE         1205    ACTIVE\n203.0.113.10    192.0.2.130     QM_IDLE         1206    ACTIVE"
+    },
+    {
+      "device": "hq-vpn-rtr",
+      "command": "debug crypto isakmp (excerpt)",
+      "output": "ISAKMP:(0): processing MAIN mode, phase 1\nISAKMP:(0): sending packet to 198.51.100.22 my_port 500 peer_port 500 (I) MM_KEY_EXCH\nISAKMP:(0): retransmitting phase 1 MM_KEY_EXCH...\nISAKMP:(0): hash payload verification failed\nISAKMP:(0): pre-shared key authentication failed with 198.51.100.22"
+    },
+    {
+      "device": "plant-edge-rtr (console, via plant IT)",
+      "command": "show running-config | include crypto isakmp key",
+      "output": "crypto isakmp key PLANT-2026-Q1-xxxx address 203.0.113.10"
+    }
+  ],
+  "monitoring": {
+    "metric": "vpn_tunnel_state_by_site",
+    "notes": "Tunnel-state panel shows all four site tunnels dropping at 02:00-02:05 during the rotation window; sites A, B, and C re-established within 2 minutes (both ends re-keyed), while the plant tunnel has stayed down in MM_KEY_EXCH ever since. The rotation job log confirms plant-edge-rtr was skipped as 'unreachable' — its management access rides the very tunnel the rotation tore down, so the remote end still has the Q1 key while HQ now has the Q2 key."
+  },
+  "hints": [
+    "Three tunnels recovered after the rotation and one didn't — compare what the rotation job actually did on each peer, not just on the HQ router.",
+    "The isakmp debug shows 'pre-shared key authentication failed' / MM_KEY_EXCH stuck — a classic PSK mismatch. Check which key the plant router still has.",
+    "The Ansible recap shows plant-edge-rtr 'unreachable: host skipped' — its management path goes over the VPN itself, so only HQ was re-keyed. HQ has the new Q2 PSK, the plant still has PLANT-2026-Q1: a key mismatch. Re-key the plant end out-of-band (console/4G) and add out-of-band mgmt for future rotations."
+  ],
+  "solution": {
+    "root_cause": "The quarterly credential rotation updated the pre-shared key for the plant peer on hq-vpn-rtr, but the matching update on plant-edge-rtr never happened — the rotation job's recap shows the host was skipped as 'unreachable' because its management path traverses the VPN that the rotation itself brought down. The two ends now have mismatched PSKs (Q2 on HQ, Q1 on the plant), so IKE phase 1 fails in MM_KEY_EXCH with 'pre-shared key authentication failed' and the tunnel cannot re-establish.",
+    "fix": "Re-key plant-edge-rtr out-of-band (console via plant IT, or OOB management) with the new Q2 pre-shared key so both ends match, verify the ISAKMP SA reaches QM_IDLE, and change the rotation runbook to re-key remote ends via out-of-band paths (or stage keys with 'key rollover') before rotating the hub.",
+    "acceptable_answers": [
+      ["psk mismatch", "pre-shared key mismatch", "key mismatch", "mismatched psk", "mismatched keys", "different key", "old key", "q1 key", "one side"],
+      ["skipped", "unreachable", "never updated", "not updated", "only hq", "plant-edge-rtr", "out-of-band", "management path traverses"]
+    ],
+    "min_matches": 2
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "id": "capstone-ospf-playbook-001",
+  "title": "The Playbook That Broke OSPF",
+  "track": "Automation + Routing",
+  "points_total": 600,
+  "stages": [
+    {
+      "title": "Stage 1 — Diagnose the outage",
+      "stage_type": "diagnose",
+      "question_type": "free_text",
+      "points": 200,
+      "context": {
+        "narrative": "At 21:30 a scheduled Ansible run applied a 'standardize OSPF timers' playbook to all 40 campus routers. Within a minute, OSPF adjacencies started flapping campus-wide and inter-VLAN traffic began failing intermittently. The on-call engineer rolled nothing back yet — your job is to explain exactly what broke. Review the artifacts and state the root cause and the immediate fix.",
+        "artifacts": [
+          {
+            "label": "core-rtr1 syslog",
+            "content": "Jul 17 21:31:12: %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.2 on Gi0/1 from FULL to DOWN, Neighbor Down: Dead timer expired\nJul 17 21:31:13: %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.2 on Gi0/1 from DOWN to INIT\nJul 17 21:31:53: %OSPF-5-ADJCHG: Process 1, Nbr 10.1.1.2 on Gi0/1 from INIT to DOWN"
+          },
+          {
+            "label": "playbook diff applied at 21:30 (git show, excerpt)",
+            "content": "- name: standardize OSPF timers\n  cisco.ios.ios_config:\n    parents: interface {{ item }}\n    lines:\n      - ip ospf hello-interval 60\n  loop: \"{{ ospf_interfaces }}\"\n# intent per design doc: hello 10 / dead 40 everywhere\n# NOTE: value '60' was copied from the dead-interval column of the design sheet"
+          },
+          {
+            "label": "core-rtr1: show ip ospf interface Gi0/1 (after run)",
+            "content": "Timer intervals configured, Hello 60, Dead 240, Wait 240, Retransmit 5\n  Neighbor Count is 1, Adjacent neighbor count is 0"
+          },
+          {
+            "label": "dist-sw2 (missed by the run - was unreachable): show ip ospf interface Vlan99",
+            "content": "Timer intervals configured, Hello 10, Dead 40, Wait 40, Retransmit 5"
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          ["hello-interval 60", "hello 60", "wrong hello", "wrong timer", "timer mismatch", "mismatched timers", "hello/dead mismatch", "copied from the dead-interval", "should be 10"],
+          ["unreachable", "missed by the run", "dist-sw2", "some routers", "not all routers", "still 10", "hello 10", "subset"]
+        ],
+        "min_matches": 2,
+        "explanation": "The playbook pushed 'ip ospf hello-interval 60' (a value copied from the dead-interval column — the design intent was hello 10) to every reachable router. Devices the run missed (like dist-sw2, unreachable at 21:30) still run hello 10/dead 40, so every link between an updated and a non-updated router now has mismatched hello/dead timers — OSPF requires them to match, so those adjacencies cycle FULL→DOWN→INIT. Immediate fix: push hello-interval 10 back out (or remove the line) so both sides match."
+      }
+    },
+    {
+      "title": "Stage 2 — Write the corrected automation",
+      "stage_type": "fix",
+      "question_type": "fill_blank",
+      "points": 200,
+      "context": {
+        "narrative": "Now repair the playbook so it applies the intended design (hello 10 / dead 40) to every OSPF interface. Fill in the missing config line that sets the correct hello interval (the dead interval defaults to 4x hello, matching the design).",
+        "artifacts": [
+          {
+            "label": "fix-ospf-timers.yml (your edit)",
+            "content": "- name: apply design-standard OSPF timers\n  cisco.ios.ios_config:\n    parents: interface {{ item }}\n    lines:\n      - ____\n  loop: \"{{ ospf_interfaces }}\""
+          },
+          {
+            "label": "design doc excerpt",
+            "content": "OSPF timers (all campus links): hello-interval 10s, dead-interval 40s (default 4x hello)"
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          ["ip ospf hello-interval 10", "hello-interval 10"]
+        ],
+        "min_matches": 1,
+        "explanation": "The line is 'ip ospf hello-interval 10' — with hello at 10s, the dead interval defaults to 40s (4x hello), matching the design and the untouched routers, so all adjacencies re-form."
+      }
+    },
+    {
+      "title": "Stage 3 — Add the guardrail",
+      "stage_type": "guardrail",
+      "question_type": "mcq",
+      "points": 200,
+      "context": {
+        "narrative": "The incident review asks for a pipeline guardrail so a bad timer value can never hit all 40 routers at once again. Which change is the most effective first guardrail?",
+        "artifacts": [
+          {
+            "label": "current CI pipeline",
+            "content": "on merge to main:\n  - ansible-playbook site.yml   # straight to all 40 routers, no check, no canary"
+          }
+        ]
+      },
+      "choices": [
+        "Run 'ansible-playbook --check --diff' against a canary group first, require human review of the diff, then roll out in batches",
+        "Increase the OSPF dead-interval everywhere so mismatches take longer to drop adjacencies",
+        "Switch the playbook from ios_config to raw so changes apply faster and the outage window is shorter",
+        "Add a cron job that reverts all OSPF config to a golden snapshot every night"
+      ],
+      "solution": {
+        "acceptable_answers": [
+          "run 'ansible-playbook --check --diff' against a canary group first, require human review of the diff, then roll out in batches"
+        ],
+        "explanation": "Check mode + diff against a canary group surfaces exactly what would change (the wrong '60' would have been visible in review) before any production device is touched, and batched rollout caps the blast radius. The other options either mask the problem, speed up the damage, or fight the automation instead of gating it."
+      }
+    }
+  ]
+}

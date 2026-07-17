@@ -4,8 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, SessionLocal, engine
-from app.routers import challenges
+from app.routers import capstones, challenges, codeops, lessons
 from app.seed import seed_challenges
+from app.seed_capstones import seed_capstones
+from app.seed_codeops import seed_codeops_challenges
+from app.seed_lessons import seed_lessons
 
 app = FastAPI(title="NetCode API", version="0.1.1")
 
@@ -20,6 +23,9 @@ app.add_middleware(
 )
 
 app.include_router(challenges.router)
+app.include_router(codeops.router)
+app.include_router(lessons.router)
+app.include_router(capstones.router)
 
 
 @app.on_event("startup")
@@ -28,6 +34,9 @@ def on_startup():
     db = SessionLocal()
     try:
         seed_challenges(db)
+        seed_codeops_challenges(db)
+        seed_lessons(db)
+        seed_capstones(db)
     finally:
         db.close()
 

@@ -1,0 +1,30 @@
+{
+  "id": "git-workflow-001",
+  "title": "Choosing a Git Workflow for a Shared Automation Script",
+  "track": "Git & GitHub",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "mcq",
+  "choices": [
+    "Create a feature branch, commit your changes, open a pull request for review, then merge",
+    "Commit directly to main and push whenever you have working code",
+    "Email the updated .py file to the team and have them copy-paste it in manually",
+    "Force-push your local main over origin/main so everyone gets your version"
+  ],
+  "problem": {
+    "statement": "Three network engineers share one Ansible/Netmiko automation repo that pushes config changes to production switches. You need to add a new NTP-check task without risking someone else's in-progress work or breaking main. What is the correct Git workflow?",
+    "code_context": "",
+    "use_case": "Automation scripts that touch production network config need the same review discipline as application code — an unreviewed direct push to main can misconfigure hundreds of devices the next time the pipeline runs."
+  },
+  "hints": [
+    "Think about how code review and CI checks get applied before something reaches main.",
+    "Isolating your work in its own branch protects both your changes and everyone else's until they're reviewed.",
+    "Feature branch -> pull request -> review -> merge is the standard collaborative workflow."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "create a feature branch, commit your changes, open a pull request for review, then merge"
+    ],
+    "explanation": "A feature branch keeps your work isolated until it's reviewed and merged via a pull request, giving teammates and CI a chance to catch issues before they reach main and get deployed to production devices."
+  }
+}

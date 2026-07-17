@@ -1,0 +1,21 @@
+{
+  "id": "coding-python-001",
+  "title": "Variables and Lists",
+  "category": "coding",
+  "track": "Python",
+  "order": 1,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "A variable is just a named box that stores a value — a number, a piece of text (called a 'string'), or a collection of values. A list is a variable that holds an ordered collection of items, written between square brackets and separated by commas. You access one item in a list by its position, called its 'index', which starts counting at 0, not 1.",
+    "example": "hostnames = [\"r1\", \"r2\", \"r3\"]\nprint(hostnames[0])   # prints r1  (the first item, index 0)\nprint(hostnames[1])   # prints r2  (the second item, index 1)"
+  },
+  "check": {
+    "statement": "Given hostnames = [\"r1\", \"r2\", \"r3\"], what code would you write to print the third item in the list, \"r3\"?"
+  },
+  "solution": {
+    "acceptable_answers": ["print(hostnames[2])", "hostnames[2]"],
+    "explanation": "Since indexing starts at 0, the third item is at index 2: print(hostnames[2]). hostnames[0] is 'r1', hostnames[1] is 'r2', hostnames[2] is 'r3'."
+  }
+}

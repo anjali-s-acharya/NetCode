@@ -1,0 +1,26 @@
+{
+  "id": "coding-restapi-001",
+  "title": "What Is a REST API?",
+  "category": "coding",
+  "track": "REST API",
+  "order": 1,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "GET",
+    "SEND",
+    "FETCH",
+    "PULL"
+  ],
+  "content": {
+    "explanation": "A REST API lets programs talk to a system (like a network controller or monitoring platform) over HTTP, the same protocol your browser uses. Instead of logging into a web page, your script sends an HTTP request to a URL and gets back structured data — usually in JSON format — that it can parse and act on. Different HTTP 'methods' mean different actions: reading data versus creating or changing it.",
+    "example": "requests.get(\"https://catalyst-center.local/dna/intent/api/v1/device-health\")\n# Cisco Catalyst Center's Intent API returns something like:\n# {\"response\": [{\"name\": \"sw-access-12\", \"cpuUtilization\": 87}], \"version\": \"1.0\"}"
+  },
+  "check": {
+    "statement": "Which HTTP method is conventionally used to retrieve/read data from an API without changing anything on the server?"
+  },
+  "solution": {
+    "acceptable_answers": ["get"],
+    "explanation": "GET is the standard HTTP method for reading data without side effects. POST creates new data, PUT/PATCH update existing data, and DELETE removes it — 'SEND', 'FETCH', and 'PULL' aren't standard HTTP methods."
+  }
+}

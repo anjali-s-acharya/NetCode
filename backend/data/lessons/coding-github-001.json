@@ -1,0 +1,26 @@
+{
+  "id": "coding-github-001",
+  "title": "Git vs. GitHub, and What a Commit Is",
+  "category": "coding",
+  "track": "GitHub",
+  "order": 1,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "A saved snapshot of your changes, with a message describing what changed",
+    "A live, always-on connection to a remote server",
+    "A backup copy of your entire computer",
+    "A chat message sent to your teammates"
+  ],
+  "content": {
+    "explanation": "Git is version control software that tracks changes to files over time, running entirely on your own machine. GitHub is a website that hosts Git repositories online so teams can share and collaborate on them — Git is the tool, GitHub is one place to store and share what it tracks (GitLab and Bitbucket are alternatives). Every time you save a meaningful set of changes in Git, you create a 'commit': a snapshot of exactly what the files looked like at that moment, with a short message explaining why.",
+    "example": "git add ntp_check.py\ngit commit -m \"Add NTP drift check task\"\ngit push origin feature/ntp-check\n# 'commit' saves a snapshot locally; 'push' uploads that snapshot to GitHub"
+  },
+  "check": {
+    "statement": "What is a Git 'commit'?"
+  },
+  "solution": {
+    "acceptable_answers": ["a saved snapshot of your changes, with a message describing what changed"],
+    "explanation": "A commit is a snapshot of your files at a point in time, paired with a message describing the change — this is what lets you see history, compare versions, and revert if something breaks."
+  }
+}

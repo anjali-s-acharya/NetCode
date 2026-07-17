@@ -1,0 +1,26 @@
+{
+  "id": "networking-dns-001",
+  "title": "What Is DNS?",
+  "category": "networking",
+  "track": "DNS",
+  "order": 1,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "A record",
+    "MX record",
+    "TXT record",
+    "CNAME record"
+  ],
+  "content": {
+    "explanation": "DNS (Domain Name System) is the phonebook of the internet. Computers address each other using IP addresses like 172.16.5.20, but humans use names like crm.corp.local. DNS translates a name into an IP address through a 'query' to a DNS server, so your browser or app knows where to actually connect.",
+    "example": "You type crm.corp.local in your browser.\n1. Your PC asks its configured DNS server: \"What's the IP for crm.corp.local?\"\n2. The DNS server looks it up in its records and replies: \"172.16.5.20\"\n3. Your PC connects directly to 172.16.5.20.\n\nOn a Cisco IOS router, the resolver it queries is set with:\nip name-server 172.16.5.20\nshow hosts   ! displays the configured name server(s) and any cached lookups"
+  },
+  "check": {
+    "statement": "Which type of DNS record maps a hostname to an IPv4 address?"
+  },
+  "solution": {
+    "acceptable_answers": ["a record"],
+    "explanation": "An 'A record' maps a hostname to an IPv4 address (AAAA is the IPv6 equivalent). MX records point to mail servers, TXT records hold arbitrary text data, and CNAME records alias one name to another name rather than directly to an IP."
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "netmiko-missing-code-001",
+  "title": "Missing Code to Collect Interface Status From Multiple Routers",
+  "track": "Netmiko",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "This script is supposed to connect to each router in `devices` and print the output of 'show ip interface brief'. It runs without errors but never prints anything, because it opens each connection and never actually sends the command. Fill in the missing line.",
+    "code_context": "from netmiko import ConnectHandler\n\ndevices = [\n    {\"device_type\": \"cisco_ios\", \"host\": \"10.0.0.1\", \"username\": \"admin\", \"password\": \"secret\"},\n    {\"device_type\": \"cisco_ios\", \"host\": \"10.0.0.2\", \"username\": \"admin\", \"password\": \"secret\"},\n]\n\nfor device in devices:\n    conn = ConnectHandler(**device)\n    output = ____\n    print(output)\n    conn.disconnect()",
+    "use_case": "This is the core pattern behind almost every Netmiko inventory script: loop over devices, open an SSH session, run one or more show commands, and collect the output for parsing or reporting — the exact building block used to power the down-interface health checks NOC teams run every morning."
+  },
+  "hints": [
+    "ConnectHandler gives you a connection object, but sending a command is a separate method call on it.",
+    "Netmiko's connection object has a send_command() method for exec-mode show commands.",
+    "conn.send_command('show ip interface brief')"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "conn.send_command('show ip interface brief')",
+      "conn.send_command(\"show ip interface brief\")",
+      "send_command('show ip interface brief')"
+    ],
+    "explanation": "conn.send_command('show ip interface brief') actually sends the command over the SSH session and returns its output; ConnectHandler alone only opens the connection."
+  }
+}

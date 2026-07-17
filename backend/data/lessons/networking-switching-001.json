@@ -1,0 +1,21 @@
+{
+  "id": "networking-switching-001",
+  "title": "What Is a VLAN?",
+  "category": "networking",
+  "track": "Switching",
+  "order": 1,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "A VLAN (Virtual LAN) lets you split one physical switch into multiple separate logical networks. Devices in the same VLAN can talk to each other directly at Layer 2, but devices in different VLANs cannot — even if they're plugged into the very same switch — unless a router or Layer 3 device forwards traffic between them.",
+    "example": "A single 48-port switch might have ports 1-24 assigned to VLAN 10 (Engineering) and ports 25-48 assigned to VLAN 20 (Sales). A PC on port 5 (VLAN 10) can reach a PC on port 12 (VLAN 10), but cannot reach a PC on port 30 (VLAN 20) without going through a router.\n\nOn a Cisco IOS switch, assigning a port to VLAN 10 looks like:\ninterface GigabitEthernet0/5\n switchport mode access\n switchport access vlan 10\n\nand 'show vlan brief' lists which ports belong to which VLAN."
+  },
+  "check": {
+    "statement": "Fill in the blank: to allow devices in two different VLANs to communicate, traffic must pass through a router or a Layer ____ device."
+  },
+  "solution": {
+    "acceptable_answers": ["3", "layer 3", "l3"],
+    "explanation": "VLANs are isolated at Layer 2, so inter-VLAN communication requires Layer 3 routing — either a router-on-a-stick, a Layer 3 switch, or a firewall doing the routing."
+  }
+}

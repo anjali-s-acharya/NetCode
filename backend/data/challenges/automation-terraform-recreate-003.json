@@ -1,0 +1,68 @@
+{
+  "id": "automation-terraform-recreate-003",
+  "title": "Midday Session Drop for Every Remote User After a 'Rename-Only' Terraform PR",
+  "track": "Automation",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "At 13:05 every remote user's VPN session dropped simultaneously and took ~4 minutes to recover. The only change in flight was a Terraform PR described as 'refactor: rename firewall NAT resource for naming-standard compliance — no functional change'. The apply job ran at 13:04. Firewall vendor support found no fault on the device.",
+    "reportedBy": "Incident bridge (SEV2 post-incident review)",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "The perimeter firewall's NAT and VPN configuration is managed by Terraform through the vendor provider. The remote-access VPN's NAT exemption object is a Terraform resource; destroying it drops all established VPN sessions. Terraform tracks resources by their address (type + name) in state — renaming a resource without telling Terraform it moved makes it plan a destroy of the old address and a create of the new one.",
+    "nodes": [
+      { "id": "runner", "label": "CI (terraform apply)", "type": "server" },
+      { "id": "fw", "label": "perimeter-fw (NAT + RA-VPN)", "type": "firewall" },
+      { "id": "vpnusers", "label": "Remote users (RA-VPN)", "type": "client" }
+    ],
+    "links": [
+      { "from": "runner", "to": "fw", "label": "provider API" },
+      { "from": "vpnusers", "to": "fw", "label": "VPN sessions (dropped 13:05)" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "terraform plan output (from CI, PR #412)",
+      "content": "Terraform will perform the following actions:\n\n  # fw_nat_rule.vpn_exempt will be destroyed\n  - resource \"fw_nat_rule\" \"vpn_exempt\" { ... }\n\n  # fw_nat_rule.ra_vpn_nat_exemption will be created\n  + resource \"fw_nat_rule\" \"ra_vpn_nat_exemption\" { ... }\n\nPlan: 1 to add, 0 to change, 1 to destroy."
+    },
+    {
+      "source": "CI job log",
+      "content": "13:04:41 terraform apply -auto-approve tfplan\n13:04:52 fw_nat_rule.vpn_exempt: Destroying...\n13:04:55 fw_nat_rule.vpn_exempt: Destruction complete after 3s\n13:04:56 fw_nat_rule.ra_vpn_nat_exemption: Creating...\n13:08:31 fw_nat_rule.ra_vpn_nat_exemption: Creation complete after 3m35s"
+    },
+    {
+      "source": "perimeter-fw event log",
+      "content": "13:04:55 NAT rule 'vpn-exempt' deleted by api-svc-terraform\n13:04:56 813 VPN sessions torn down (NAT exemption removed)\n13:08:31 NAT rule 're-created' by api-svc-terraform"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "CI repo",
+      "command": "git diff PR#412 (excerpt)",
+      "output": "-resource \"fw_nat_rule\" \"vpn_exempt\" {\n+resource \"fw_nat_rule\" \"ra_vpn_nat_exemption\" {\n   name = \"vpn-exempt\"\n   ...unchanged attributes...\n }\n(no moved block in the PR)"
+    },
+    {
+      "device": "CI repo",
+      "command": "grep -r \"moved\" *.tf",
+      "output": "(no results)"
+    }
+  ],
+  "monitoring": {
+    "metric": "vpn_session_count",
+    "notes": "Session count graph: steady ~800 sessions, cliff to 0 at 13:04:55 (the exact second the destroy completed), slow ramp back after 13:08:31 when the replacement rule finished creating. The plan output in CI clearly showed '1 to add, 1 to destroy' — a destroy/create pair for what the PR claimed was a rename — but the job auto-approved the plan without a human gate."
+  },
+  "hints": [
+    "The PR claimed 'no functional change', but the plan said '1 to add, 1 to destroy' — in Terraform, what does renaming a resource do to state if you don't declare the rename?",
+    "Terraform tracks resources by address; a renamed address is a new resource. Look for a 'moved' block in the diff.",
+    "Without a 'moved { from = fw_nat_rule.vpn_exempt, to = fw_nat_rule.ra_vpn_nat_exemption }' block (or 'terraform state mv'), Terraform destroyed the NAT exemption and recreated it — dropping all 813 VPN sessions during the gap. Add moved blocks for renames and require human review when a plan shows any destroy."
+  ],
+  "solution": {
+    "root_cause": "PR #412 renamed the Terraform resource address (fw_nat_rule.vpn_exempt -> fw_nat_rule.ra_vpn_nat_exemption) without a 'moved' block or 'terraform state mv'. Terraform tracks resources by address, so it planned — and CI auto-approved — a destroy of the old resource and a create of the new one. Destroying the NAT exemption rule tore down all ~813 remote-access VPN sessions at 13:04:55; service only recovered when the replacement rule finished creating at 13:08:31.",
+    "fix": "For renames, declare the move so state follows the new address: add a 'moved { from = ..., to = ... }' block (or run 'terraform state mv') so the plan shows zero destroys; and change the pipeline so any plan containing a destroy requires explicit human approval instead of -auto-approve.",
+    "acceptable_answers": [
+      ["moved block", "terraform state mv", "state mv", "rename without", "tracks resources by address", "new address", "destroy and create", "destroy/create", "recreate", "1 to destroy"],
+      ["auto-approve", "auto approve", "human approval", "review the plan", "plan gate", "require approval", "nat exemption"]
+    ],
+    "min_matches": 2
+  }
+}

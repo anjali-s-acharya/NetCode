@@ -1,0 +1,30 @@
+{
+  "id": "devnet-catalyst-health-001",
+  "title": "Read Device Health From the Catalyst Center Intent API",
+  "track": "REST API",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "mcq",
+  "choices": [
+    "response.json()['response'][0]['cpuUtilization']",
+    "response.json()['cpuUtilization']",
+    "response['response']['cpuUtilization']",
+    "response.json()['response']['device'][0]['cpuUtilization']"
+  ],
+  "problem": {
+    "statement": "Cisco Catalyst Center (formerly DNA Center) exposes a public Intent API. A GET to /dna/intent/api/v1/device-health returns the JSON payload shown below, wrapping results in a top-level 'response' list (this is the standard Catalyst Center Intent API envelope — nearly every endpoint returns {\"response\": [...], \"version\": \"...\"}). Which expression correctly reads the CPU utilization of the first device in the response?",
+    "code_context": "{\n  \"response\": [\n    {\n      \"name\": \"sw-access-12\",\n      \"overallHealth\": 8,\n      \"cpuUtilization\": 87,\n      \"memoryUtilization\": 62,\n      \"reachabilityHealth\": \"UP\"\n    }\n  ],\n  \"version\": \"1.0\"\n}",
+    "use_case": "Catalyst Center centralizes health data for an entire Cisco fleet behind one Intent API, so automation scripts poll this single endpoint instead of SSH-ing into every device individually — but nearly every response is wrapped in this same {\"response\": [...]} envelope, and forgetting to index into the list (not just the dict) is the most common parsing mistake against this API."
+  },
+  "hints": [
+    "Catalyst Center's Intent API always wraps results in a top-level 'response' key, and for multi-device endpoints that value is a list, not a single dict.",
+    "You need to index into the list before reading device fields — response.json()['response'] gives you a list of devices, not one device.",
+    "response.json()['response'][0]['cpuUtilization']"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "response.json()['response'][0]['cpuutilization']"
+    ],
+    "explanation": "Catalyst Center's Intent API wraps results in a top-level 'response' list, so you must index into element [0] (the first device) before reading its 'cpuUtilization' field: response.json()['response'][0]['cpuUtilization']."
+  }
+}

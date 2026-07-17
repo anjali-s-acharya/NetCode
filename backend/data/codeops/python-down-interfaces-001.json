@@ -1,0 +1,26 @@
+{
+  "id": "python-down-interfaces-001",
+  "title": "Find All Down Interfaces",
+  "track": "Python",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "You have a list of dicts, one per device, each with an 'interfaces' key mapping interface names to their status ('up' or 'down'). Write the missing list comprehension that returns a flat list of (device, interface) tuples for every interface that is down.",
+    "code_context": "devices = [\n    {\"name\": \"r1\", \"interfaces\": {\"Gi0/0\": \"up\", \"Gi0/1\": \"down\"}},\n    {\"name\": \"r2\", \"interfaces\": {\"Gi0/0\": \"down\", \"Gi0/1\": \"down\"}},\n]\n\ndown_interfaces = ____\n# Expected: [('r1', 'Gi0/1'), ('r2', 'Gi0/0'), ('r2', 'Gi0/1')]",
+    "use_case": "Nightly health-check scripts pull interface status from dozens of devices via Netmiko/NAPALM and need to quickly flag every down interface for the NOC dashboard, instead of an engineer scanning raw output by hand."
+  },
+  "hints": [
+    "You need a nested loop: outer over devices, inner over that device's interfaces.",
+    "A list comprehension with two 'for' clauses can flatten this in one line.",
+    "[(d['name'], iface) for d in devices for iface, status in d['interfaces'].items() if status == 'down']"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "[(d['name'], iface) for d in devices for iface, status in d['interfaces'].items() if status == 'down']",
+      "for d in devices for iface, status in d['interfaces'].items() if status == 'down'"
+    ],
+    "explanation": "A double 'for' list comprehension iterates each device and then each of its interfaces, keeping only the ones whose status is 'down': [(d['name'], iface) for d in devices for iface, status in d['interfaces'].items() if status == 'down']."
+  }
+}

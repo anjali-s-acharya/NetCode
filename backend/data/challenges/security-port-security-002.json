@@ -1,0 +1,65 @@
+{
+  "id": "security-port-security-002",
+  "title": "Conference Room Port Dead After IP Phone Swap",
+  "track": "Security",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "The conference room 2A wall port stopped working this morning right after facilities swapped the old IP phone for a new one. The link LED blinked briefly and went dark; neither the new phone nor a laptop plugged into the same jack gets any connectivity now. Other conference rooms are fine.",
+    "reportedBy": "Facilities / AV Team",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "Conference room 2A's wall jack terminates on sw-fl2-acc1 Gi0/7, configured as an access port with port-security limiting the port to one specific MAC address (statically configured for the old phone during a hardening initiative last year). The violation mode is 'shutdown', which err-disables the port on a violation.",
+    "nodes": [
+      { "id": "phone-new", "label": "New IP Phone (MAC 7c:ad:74:9b:22:10)", "type": "client" },
+      { "id": "sw-fl2-acc1", "label": "sw-fl2-acc1", "type": "switch" },
+      { "id": "cucm", "label": "Call Manager", "type": "server" }
+    ],
+    "links": [
+      { "from": "phone-new", "to": "sw-fl2-acc1", "label": "Gi0/7, port-security max 1, sticky/static MAC" },
+      { "from": "sw-fl2-acc1", "to": "cucm", "label": "voice VLAN 150" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "sw-fl2-acc1 syslog",
+      "content": "Jul 17 07:48:31: %PORT_SECURITY-2-PSECURE_VIOLATION: Security violation occurred, caused by MAC address 7cad.749b.2210 on port GigabitEthernet0/7.\nJul 17 07:48:31: %PM-4-ERR_DISABLE: psecure-violation error detected on Gi0/7, putting Gi0/7 in err-disable state\nJul 17 07:48:32: %LINEPROTO-5-UPDOWN: Line protocol on Interface GigabitEthernet0/7, changed state to down\nJul 17 07:48:33: %LINK-3-UPDOWN: Interface GigabitEthernet0/7, changed state to down"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "sw-fl2-acc1",
+      "command": "show interfaces status err-disabled",
+      "output": "Port      Name               Status       Reason               Err-disabled Vlans\nGi0/7     ConfRoom-2A        err-disabled psecure-violation"
+    },
+    {
+      "device": "sw-fl2-acc1",
+      "command": "show port-security interface GigabitEthernet0/7",
+      "output": "Port Security              : Enabled\nPort Status                : Secure-shutdown\nViolation Mode             : Shutdown\nMaximum MAC Addresses      : 1\nTotal MAC Addresses        : 1\nConfigured MAC Addresses   : 1\nLast Source Address:Vlan   : 7cad.749b.2210:150\nSecurity Violation Count   : 1"
+    },
+    {
+      "device": "sw-fl2-acc1",
+      "command": "show running-config interface GigabitEthernet0/7",
+      "output": "interface GigabitEthernet0/7\n description ConfRoom-2A\n switchport mode access\n switchport voice vlan 150\n switchport port-security\n switchport port-security mac-address 3c5a.b012.88f4\n switchport port-security violation shutdown\nend"
+    }
+  ],
+  "monitoring": {
+    "metric": "errdisable_events_by_reason",
+    "notes": "The err-disable dashboard shows a single psecure-violation event on sw-fl2-acc1 Gi0/7 at 07:48 — exactly when facilities connected the replacement phone. The statically-secured MAC on the port (3c5a.b012.88f4) belongs to the decommissioned phone; the new phone's MAC (7cad.749b.2210) triggered the violation. No other ports affected."
+  },
+  "hints": [
+    "The link came up briefly and then went hard down with no connectivity for anything plugged in — check whether the switch put the port in a special disabled state.",
+    "'show interfaces status err-disabled' and the syslog %PM-4-ERR_DISABLE line tell you the reason; then compare the secured MAC in the port-security config with the new phone's MAC.",
+    "Port-security on Gi0/7 statically allows only the old phone's MAC (3c5a.b012.88f4); the new phone (7cad.749b.2210) triggered a psecure-violation and the port went err-disabled. Update the secured MAC and bounce the port (shutdown/no shutdown) to recover."
+  ],
+  "solution": {
+    "root_cause": "Gi0/7 has port-security with a statically configured MAC for the old phone (3c5a.b012.88f4) and violation mode 'shutdown'. When the replacement phone (7cad.749b.2210) was connected, it triggered a psecure-violation and the switch err-disabled the port, killing all connectivity on the jack.",
+    "fix": "Remove or update the static secured MAC on Gi0/7 to the new phone's address (or switch to sticky learning), then recover the port with 'shutdown' / 'no shutdown' (or errdisable recovery). Consider violation mode 'restrict' for user-facing ports to avoid hard outages on device swaps.",
+    "acceptable_answers": [
+      ["err-disable", "errdisable", "err disabled", "psecure-violation", "port-security violation", "port security violation", "security violation"],
+      ["3c5a.b012.88f4", "old phone's mac", "old mac", "static mac", "secured mac", "new phone's mac", "7cad.749b.2210", "shutdown / no shutdown", "no shutdown"]
+    ],
+    "min_matches": 2
+  }
+}
