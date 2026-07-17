@@ -1,0 +1,27 @@
+{
+  "id": "python-basics-002",
+  "title": "Count Interface States from a Log",
+  "track": "Python",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "Given a list of log lines like 'Gi0/1 changed state to up' or 'Gi0/2 changed state to down', fill in the loop body of count_states so it tallies how many times each state ('up' or 'down') appears.",
+    "code_context": "def count_states(lines):\n    counts = {}\n    for line in lines:\n        ____\n    return counts\n\n# count_states([\"Gi0/1 changed state to up\", \"Gi0/2 changed state to down\", \"Gi0/1 changed state to down\"])\n# -> {\"up\": 1, \"down\": 2}",
+    "use_case": "Tallying state-change lines by outcome is the first step of most log-triage scripts — before you dig into which specific interface flapped, you want to know how many events were even 'down' events."
+  },
+  "hints": [
+    "Each line ends with either 'up' or 'down' — you can use .split() and take the last word.",
+    "A dict.get(key, 0) + 1 pattern is handy for counting without a Counter import.",
+    "state = line.strip().split()[-1]\ncounts[state] = counts.get(state, 0) + 1"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      ["split()[-1]", "last word", "line.strip().split()"],
+      ["counts.get(state, 0) + 1", "counts[state] ="]
+    ],
+    "min_matches": 2,
+    "explanation": "Take the last whitespace-separated token of each line as the state — state = line.strip().split()[-1] — and tally it with counts[state] = counts.get(state, 0) + 1."
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "coding-github-002",
+  "title": "Branches: Working Without Stepping on Each Other",
+  "category": "coding",
+  "track": "GitHub",
+  "order": 2,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "git checkout -b feature-ntp-check",
+    "git branch feature-ntp-check",
+    "git commit -b feature-ntp-check",
+    "git merge feature-ntp-check"
+  ],
+  "content": {
+    "explanation": "A branch is an independent line of work in a repo. Instead of everyone editing the same shared history directly, each person (or each feature) works on its own branch, and changes only join main once they're reviewed and merged — so one person's half-finished work never blocks or breaks anyone else's.",
+    "example": "git checkout -b feature-ntp-check\n# now on branch feature-ntp-check, isolated from main\n... make changes, commit ...\ngit push origin feature-ntp-check\n# open a pull request to merge it back into main once it's reviewed"
+  },
+  "check": {
+    "statement": "What single command creates a new branch called feature-ntp-check AND switches to it?"
+  },
+  "solution": {
+    "acceptable_answers": ["git checkout -b feature-ntp-check"],
+    "explanation": "'git checkout -b <name>' is the create-and-switch shortcut — 'git branch <name>' only creates the branch without switching to it, so you'd still be committing to your old branch by mistake."
+  }
+}

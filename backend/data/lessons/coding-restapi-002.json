@@ -1,0 +1,26 @@
+{
+  "id": "coding-restapi-002",
+  "title": "HTTP Status Codes",
+  "category": "coding",
+  "track": "REST API",
+  "order": 2,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "The requested resource wasn't found",
+    "The server crashed while processing the request",
+    "The request succeeded but returned no data",
+    "You're not authenticated"
+  ],
+  "content": {
+    "explanation": "Every API response carries an HTTP status code telling you, at a glance, what kind of outcome happened. As a rough guide: 2xx means success, 4xx means the client did something wrong (bad request, missing auth, wrong URL), and 5xx means the server itself failed. Checking the status code before trusting the response body is a habit every script needs.",
+    "example": "response = requests.get(\"https://api.example.com/devices/999\")\nprint(response.status_code)   # 404\n# 999 doesn't exist as a device ID -- the server is telling you so, clearly, before you even look at the body"
+  },
+  "check": {
+    "statement": "A GET request to an API returns status code 404. What does that mean?"
+  },
+  "solution": {
+    "acceptable_answers": ["the requested resource wasn't found"],
+    "explanation": "404 Not Found means the server understood the request but couldn't find anything at that URL/ID — very different from a 500 (server error) or a 401/403 (auth problem), which is why checking the exact code matters, not just 'did it fail'."
+  }
+}

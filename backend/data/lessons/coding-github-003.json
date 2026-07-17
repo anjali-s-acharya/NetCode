@@ -1,0 +1,21 @@
+{
+  "id": "coding-github-003",
+  "title": "Pull Requests and Code Review",
+  "category": "coding",
+  "track": "GitHub",
+  "order": 3,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "Once your branch is ready, you don't just merge it into main yourself — you open a pull request (PR), which is a request asking teammates (and often automated checks) to review your changes before they're merged. This is what catches mistakes before they reach production, and it's standard practice on any team repo, including ones that push config to real network devices.",
+    "example": "git push origin feature-ntp-check\n# then on GitHub: click 'Compare & pull request'\n# teammates comment on specific lines, request changes, or approve\n# only after approval does the branch get merged into main"
+  },
+  "check": {
+    "statement": "Fill in the blank: opening a ____ request lets teammates review your branch's changes before they're merged into main."
+  },
+  "solution": {
+    "acceptable_answers": ["pull"],
+    "explanation": "A pull request is the mechanism GitHub (and similar platforms) use to gate a merge behind review — reviewers see the full diff, can leave comments, and the branch typically can't merge until it's approved (and any required CI checks pass)."
+  }
+}

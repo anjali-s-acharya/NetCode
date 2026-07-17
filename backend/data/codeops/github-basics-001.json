@@ -1,0 +1,29 @@
+{
+  "id": "github-basics-001",
+  "title": "Write the Right .gitignore",
+  "track": "Git & GitHub",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "You're setting up a repo containing a Python virtual environment folder venv/, a .env file with secrets, Terraform state files (*.tfstate), and compiled __pycache__/ folders. Write the contents of a .gitignore file that excludes all of these from version control.",
+    "code_context": "",
+    "use_case": "Committing secrets (.env), machine-specific virtualenvs, and generated state/bytecode files is one of the most common real-world Git mistakes — a correct .gitignore in the very first commit prevents all of them."
+  },
+  "hints": [
+    "Trailing slash (venv/) means 'this directory, wherever it appears' — good practice for folder excludes.",
+    "Don't forget .env — committing secrets is one of the most common real-world Git mistakes.",
+    "Terraform state files contain sensitive infra data and should never be committed either."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "venv/",
+      ".env",
+      "*.tfstate",
+      "__pycache__/"
+    ],
+    "min_matches": 4,
+    "explanation": "Each pattern excludes a category of file that's either environment-specific, secret, or generated/compiled — none belong in version control: venv/, .env, *.tfstate, __pycache__/ (and typically *.pyc, .terraform/ alongside them)."
+  }
+}

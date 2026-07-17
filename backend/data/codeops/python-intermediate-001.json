@@ -1,0 +1,27 @@
+{
+  "id": "python-intermediate-001",
+  "title": "Parse Syslog for Interface Flaps",
+  "track": "Python",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "Given raw syslog text with lines like '%LINK-3-UPDOWN: Interface GigabitEthernet0/3, changed state to down', fill in the loop body so find_flapping_interfaces tallies state changes per interface using the already-matched regex groups, ready to be filtered by threshold.",
+    "code_context": "import re\n\ndef find_flapping_interfaces(log_text: str, threshold: int = 3) -> list:\n    pattern = r'Interface (\\S+?),? changed state to (up|down)'\n    counts = {}\n    for match in re.finditer(pattern, log_text):\n        ____\n    return sorted([iface for iface, c in counts.items() if c >= threshold])",
+    "use_case": "Flap-counting from raw syslog text is the building block behind 'which interfaces are unstable' dashboards — instead of a human scrolling thousands of log lines, a script flags anything crossing a flap threshold in seconds."
+  },
+  "hints": [
+    "match.group(1) is the interface name captured by the regex; match.group(2) is 'up' or 'down' (not needed for the count itself).",
+    "Tally occurrences per interface name in the counts dict, the same get(key, 0) + 1 pattern as a basic counter.",
+    "iface = match.group(1)\ncounts[iface] = counts.get(iface, 0) + 1"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      ["match.group(1)", "group(1)"],
+      ["counts.get(iface, 0) + 1", "counts[iface] ="]
+    ],
+    "min_matches": 2,
+    "explanation": "Extract the interface name from the match with match.group(1), then tally it: counts[iface] = counts.get(iface, 0) + 1. The final line filters interfaces whose count meets or exceeds the threshold."
+  }
+}

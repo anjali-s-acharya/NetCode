@@ -1,0 +1,94 @@
+{
+  "id": "capstone-terraform-001",
+  "title": "Terraform Apply Silently Removed a Route Table Entry",
+  "track": "Automation + Terraform",
+  "points_total": 500,
+  "stages": [
+    {
+      "title": "Stage 1 — Diagnose the outage",
+      "stage_type": "diagnose",
+      "question_type": "free_text",
+      "points": 200,
+      "context": {
+        "narrative": "A routine 'terraform apply' to add a new subnet to the VPC caused a 20-minute outage for an unrelated production app in the same VPC. The app lost connectivity to an on-prem database over the site-to-site VPN. The route table (rt-main) is shared by multiple subnets; one route sends on-prem-bound traffic (10.50.0.0/16) via the VPN gateway. That route is managed as a separate 'aws_route' resource, independent from the route table resource itself, which also has some routes declared inline.",
+        "artifacts": [
+          {
+            "label": "terraform apply output (excerpt)",
+            "content": "~ aws_route_table.rt_main will be updated in-place\n  route { } -> route { cidr_block = \"10.60.0.0/16\" ... } (new route added)\n\naws_route.on_prem_vpn: Refreshing state...\naws_route.on_prem_vpn: Destroying...\n\nApp logs: connection timeouts to on-prem DB starting immediately after the apply completed"
+          },
+          {
+            "label": "terraform state list (excerpt)",
+            "content": "aws_route_table.rt_main\naws_route.on_prem_vpn"
+          },
+          {
+            "label": "aws ec2 describe-route-tables (post-incident)",
+            "content": "Routes: [10.60.0.0/16 -> new subnet, local -> vpc, NO route for 10.50.0.0/16]"
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          "mixing aws_route and aws_route_table",
+          "standalone route resource conflict",
+          "inline routes vs standalone aws_route",
+          "route table authoritative routes overwrote standalone route",
+          "aws_route.on_prem_vpn: destroying"
+        ],
+        "explanation": "The on-prem VPN route was managed as a standalone 'aws_route' resource while the same route table was also managed with inline 'route {}' blocks in 'aws_route_table' for other routes. Terraform's AWS provider treats these as conflicting sources of truth for the table's route set; adding a new inline route caused Terraform to reconcile the table to only the inline-declared routes, destroying the standalone-managed VPN route — visible right in the apply output as 'aws_route.on_prem_vpn: Destroying...'."
+      }
+    },
+    {
+      "title": "Stage 2 — Write the corrected Terraform",
+      "stage_type": "fix",
+      "question_type": "fill_blank",
+      "points": 150,
+      "context": {
+        "narrative": "Fix isn't just 're-add the route' — restructure so route management isn't split across two conflicting resource types. Fill in the missing inline route block so the on-prem VPN route lives inside the same aws_route_table resource as the new subnet route (and the standalone aws_route.on_prem_vpn resource should be removed entirely).",
+        "artifacts": [
+          {
+            "label": "corrected aws_route_table (your edit)",
+            "content": "resource \"aws_route_table\" \"rt_main\" {\n  vpc_id = aws_vpc.main.id\n\n  route {\n    cidr_block = \"10.60.0.0/16\"\n    gateway_id = aws_internet_gateway.igw.id\n  }\n\n  ____\n}\n# Remove the standalone aws_route.on_prem_vpn resource entirely -\n# all routes for this table now live in one place."
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          ["10.50.0.0/16"],
+          ["aws_vpn_gateway.vpn.id", "gateway_id = aws_vpn_gateway.vpn.id"]
+        ],
+        "min_matches": 2,
+        "explanation": "The missing block is:\nroute {\n  cidr_block = \"10.50.0.0/16\"\n  gateway_id = aws_vpn_gateway.vpn.id\n}\nPutting every route inline inside one aws_route_table resource means there's a single source of truth — no more standalone aws_route resource for Terraform to reconcile away."
+      }
+    },
+    {
+      "title": "Stage 3 — Add the guardrail",
+      "stage_type": "guardrail",
+      "question_type": "free_text",
+      "points": 150,
+      "context": {
+        "narrative": "Describe the CI guardrail that would have caught this specific anti-pattern (mixing inline routes and a standalone aws_route on the same table) before the apply ever ran.",
+        "artifacts": [
+          {
+            "label": "current CI pipeline",
+            "content": "on merge to main:\n  - terraform plan\n  - terraform apply -auto-approve\n# no check for conflicting route-management resources on the same table"
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          "ci check",
+          "grep the plan",
+          "mixing inline and standalone",
+          "policy check",
+          "fails the pipeline",
+          "before apply",
+          "sentinel"
+        ],
+        "explanation": "Add a CI check (a plan-parsing script, or a Sentinel/OPA-style policy) that scans for any route table with both inline 'route' blocks and a standalone 'aws_route' resource targeting it, and fails the pipeline with an explicit error before apply — turning this known Terraform AWS footgun into a caught-in-review mistake instead of a production outage."
+      }
+    }
+  ]
+}

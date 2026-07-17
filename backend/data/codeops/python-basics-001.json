@@ -1,0 +1,28 @@
+{
+  "id": "python-basics-001",
+  "title": "Validate an IPv4 Address",
+  "track": "Python",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "Fill in the missing loop body so is_valid_ipv4 returns True only for a real IPv4 address: exactly 4 numeric octets, each 0-255, with no leading zeros like '01'.",
+    "code_context": "def is_valid_ipv4(ip: str) -> bool:\n    parts = ip.split('.')\n    if len(parts) != 4:\n        return False\n    for p in parts:\n        ____\n    return True\n\n# is_valid_ipv4(\"192.168.1.1\")  -> True\n# is_valid_ipv4(\"256.1.1.1\")    -> False (out of range)\n# is_valid_ipv4(\"01.2.3.4\")     -> False (leading zero)\n# is_valid_ipv4(\"10.0.0\")       -> False (only 3 parts, caught above)",
+    "use_case": "Input validation like this guards every script that accepts an IP from a CSV, an API payload, or a CLI argument — a single unvalidated bad octet can silently break a downstream Netmiko connection or Ansible inventory build."
+  },
+  "hints": [
+    "Each part must be all digits — str.isdigit() catches non-numeric input.",
+    "Leading zeros ('01') should be rejected even though int('01') == 1 — check len(p) > 1 and p[0] == '0'.",
+    "if not p.isdigit() or (len(p) > 1 and p[0] == '0') or not 0 <= int(p) <= 255: return False"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      ["isdigit"],
+      ["0 <= int(p) <= 255", "int(p) > 255", "up to 255", "int(p) <= 255"],
+      ["leading zero", "p[0] == '0'", "len(p) > 1 and p[0]"]
+    ],
+    "min_matches": 2,
+    "explanation": "The full check is: if not p.isdigit() or (len(p) > 1 and p[0] == '0') or not 0 <= int(p) <= 255: return False — reject non-digit octets, reject leading zeros, and range-check 0-255."
+  }
+}

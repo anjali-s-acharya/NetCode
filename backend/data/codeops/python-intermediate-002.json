@@ -1,0 +1,28 @@
+{
+  "id": "python-intermediate-002",
+  "title": "Build a Device Inventory from CSV",
+  "track": "Python",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "You're given CSV text with columns hostname,ip,role,site. Fill in the loop body of csv_to_inventory so it returns a dict keyed by hostname (each value a dict of the remaining fields), skipping any row where the IP is not a valid IPv4 address.",
+    "code_context": "import csv, io\n\ndef _is_valid_ipv4(ip):\n    parts = ip.split('.')\n    if len(parts) != 4:\n        return False\n    for p in parts:\n        if not p.isdigit() or (len(p) > 1 and p[0] == '0') or not 0 <= int(p) <= 255:\n            return False\n    return True\n\ndef csv_to_inventory(csv_text: str) -> dict:\n    reader = csv.DictReader(io.StringIO(csv_text))\n    inventory = {}\n    for row in reader:\n        ____\n    return inventory\n\n# csv_to_inventory(\"hostname,ip,role,site\\nsw1,10.0.1.1,switch,nyc\\nrt1,bad.ip,router,nyc\")\n# -> {\"sw1\": {\"ip\": \"10.0.1.1\", \"role\": \"switch\", \"site\": \"nyc\"}}   (rt1 skipped, bad IP)",
+    "use_case": "Turning a spreadsheet export into a clean inventory dict — with bad rows filtered out instead of silently breaking a downstream Netmiko/Ansible run — is one of the most common first automation scripts a network team writes."
+  },
+  "hints": [
+    "Call the provided _is_valid_ipv4(row['ip']) to decide whether to keep the row.",
+    "The hostname becomes the outer dict key, so pop it out of the row dict before storing the rest.",
+    "if _is_valid_ipv4(row['ip']):\n    hostname = row.pop('hostname')\n    inventory[hostname] = row"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      ["is_valid_ipv4", "valid ip", "validate"],
+      ["row.pop('hostname')", "pop('hostname')"],
+      ["inventory[hostname] = row"]
+    ],
+    "min_matches": 2,
+    "explanation": "Validate the row's IP with _is_valid_ipv4(row['ip']), and only for valid rows pop 'hostname' out (row.pop('hostname')) to use as the dict key, storing the rest of the row as its value: inventory[hostname] = row."
+  }
+}

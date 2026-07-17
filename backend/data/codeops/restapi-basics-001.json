@@ -1,0 +1,27 @@
+{
+  "id": "restapi-basics-001",
+  "title": "GET Device List and Print Hostnames",
+  "track": "REST API",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "A mock inventory API's GET /api/devices returns the JSON shown below, already parsed into a Python dict. Fill in the missing return statement for get_hostnames so it returns a list of hostnames.",
+    "code_context": "def get_hostnames(response_json: dict) -> list:\n    ____\n\n# response_json = {\"devices\": [{\"hostname\": \"sw1\", \"ip\": \"10.0.1.1\"}, {\"hostname\": \"sw2\", \"ip\": \"10.0.1.2\"}]}\n# get_hostnames(response_json) -> [\"sw1\", \"sw2\"]",
+    "use_case": "This is the exact shape of code you write right after requests.get(url).json() in any real inventory-sync script — pulling one field out of a list of nested objects."
+  },
+  "hints": [
+    "Access response_json['devices'] (or .get('devices', []) to handle a missing key safely).",
+    "A list comprehension pulling out 'hostname' per item does this in one line.",
+    "return [d['hostname'] for d in response_json.get('devices', [])]"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "[d['hostname'] for d in response_json.get('devices', [])]",
+      "for d in response_json.get('devices'",
+      "d['hostname']"
+    ],
+    "explanation": "A list comprehension over the 'devices' array extracts the hostname field: return [d['hostname'] for d in response_json.get('devices', [])]."
+  }
+}

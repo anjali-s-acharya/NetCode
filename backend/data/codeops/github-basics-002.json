@@ -1,0 +1,25 @@
+{
+  "id": "github-basics-002",
+  "title": "Resolve a Simple Merge Conflict",
+  "track": "Git & GitHub",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "You pull a branch and get this conflict in config.yaml. Your teammate's branch (feature/update-vlan) has the correct new VLAN ID of 200, which should win. Write the exact final contents of that section of config.yaml after you resolve the conflict correctly (i.e. what the file should look like with conflict markers removed).",
+    "code_context": "<<<<<<< HEAD\nvlan_id: 100\n=======\nvlan_id: 200\n>>>>>>> feature/update-vlan",
+    "use_case": "Resolving conflicts is a daily reality once more than one person touches infrastructure config — knowing which side to keep (and to fully remove every marker line, not just edit around them) is what makes 'git add' + 'git commit' safe to run next."
+  },
+  "hints": [
+    "Resolving a conflict means picking (or merging) the content between the markers, then deleting all three marker lines entirely.",
+    "The correct value per the scenario is the one from feature/update-vlan.",
+    "After editing, you'd run 'git add config.yaml' and 'git commit' to complete the merge."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "vlan_id: 200"
+    ],
+    "explanation": "Keep the correct value (200 per the scenario) and delete all conflict marker lines (<<<<<<<, =======, >>>>>>>) entirely, then stage and commit."
+  }
+}

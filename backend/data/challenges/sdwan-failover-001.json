@@ -1,0 +1,64 @@
+{
+  "id": "sdwan-failover-001",
+  "title": "SD-WAN Branch Not Failing Over to Backup Circuit",
+  "track": "SD-WAN",
+  "difficulty": "Hard",
+  "points": 350,
+  "ticket": {
+    "summary": "Branch office BR-12 lost its primary MPLS circuit at 09:14. Users report a full 6-minute outage before traffic resumed on the backup broadband circuit, even though the SD-WAN policy is supposed to fail over within 5-10 seconds (BFD-based).",
+    "reportedBy": "Branch IT / NOC",
+    "priority": "High"
+  },
+  "topology": {
+    "description": "BR-12's edge router has two WAN transports: WAN1 (MPLS, primary) and WAN2 (broadband, backup), both terminating control connections to the SD-WAN controller/orchestrator (vSmart) over the internet. A path is only usable once BOTH its data plane (BFD) and its control-plane connection to vSmart are up.",
+    "nodes": [
+      { "id": "br12-edge", "label": "BR-12 edge router", "type": "router" },
+      { "id": "wan1", "label": "WAN1 (MPLS, primary)", "type": "server" },
+      { "id": "wan2", "label": "WAN2 (broadband, backup)", "type": "server" },
+      { "id": "vsmart", "label": "vSmart controller", "type": "server" }
+    ],
+    "links": [
+      { "from": "br12-edge", "to": "wan1", "label": "BFD + control connection (down at 09:14)" },
+      { "from": "br12-edge", "to": "wan2", "label": "BFD up; control connection silently down since 08:55" },
+      { "from": "wan2", "to": "vsmart", "label": "OMP control connection" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "BR-12 edge router syslog",
+      "content": "09:14:02 BFD-6-SESSION_DOWN: neighbor 10.20.5.1 on WAN1 (MPLS) - session down, no packets received\n09:14:02 SDWAN-5-POLICY: WAN1 marked DOWN, evaluating failover to WAN2\n09:14:07 SDWAN-3-CONTROL_CONN: control connection to vSmart controller via WAN2 not yet established\n09:20:11 SDWAN-6-CONTROL_CONN: control connection to vSmart controller via WAN2 established\n09:20:12 SDWAN-5-POLICY: WAN2 promoted to active path"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "BR-12 edge router",
+      "command": "show sdwan bfd sessions",
+      "output": "WAN1: DOWN since 09:14:02\nWAN2: UP (data plane), control connection: DOWN until 09:20:11"
+    },
+    {
+      "device": "BR-12 edge router",
+      "command": "show sdwan control connections",
+      "output": "WAN2 tloc: control connection flapped at 08:55, did not reconnect until 09:20:11"
+    }
+  ],
+  "monitoring": {
+    "metric": "sdwan_control_connection_state_br12",
+    "notes": "WAN2's control-plane (OMP/vSmart) connection had been silently down since 08:55, ~19 minutes before the MPLS failure, due to an earlier transient internet blip that never recovered. Data plane on WAN2 was reachable the whole time, but the fabric wouldn't promote a path with no control connection."
+  },
+  "hints": [
+    "BFD correctly detected the MPLS failure in seconds — the delay is on the WAN2 side, not WAN1.",
+    "Look at the control connection timestamps: WAN2's control connection to the vSmart controller was already down before the outage even started.",
+    "SD-WAN routers need both data-plane reachability AND an active control connection to a controller before that path is used to carry traffic; a broken control session on the backup circuit blocks failover even if data plane is fine."
+  ],
+  "solution": {
+    "root_cause": "The backup circuit (WAN2)'s control-plane connection to the vSmart controller had silently failed ~19 minutes before the MPLS outage and never re-established, so even though WAN2's data plane was healthy, the SD-WAN fabric would not promote it to active until the control connection recovered at 09:20:11.",
+    "fix": "Alert on control-connection state per-TLOC (not just BFD/data-plane state) so a silently-down control session on a backup circuit is caught and remediated before it's needed; in this case, restarting or investigating WAN2's control session proactively would have prevented the extended outage.",
+    "acceptable_answers": [
+      "control connection",
+      "control plane down",
+      "vsmart",
+      "backup circuit control session",
+      "data plane up but control down"
+    ]
+  }
+}

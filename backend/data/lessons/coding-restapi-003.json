@@ -1,0 +1,21 @@
+{
+  "id": "coding-restapi-003",
+  "title": "POST vs GET",
+  "category": "coding",
+  "track": "REST API",
+  "order": 3,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "GET reads data and has no side effects — you can call it a thousand times and nothing on the server changes. POST is different: it's how you submit or create data, sending a payload (usually JSON) in the request body that the server acts on.",
+    "example": "requests.post(\n    \"https://api.example.com/devices\",\n    json={\"hostname\": \"sw-new-01\", \"site\": \"nyc\"}\n)\n# Unlike a GET, this actually creates a new device record on the server"
+  },
+  "check": {
+    "statement": "Fill in the blank: to create a new device record via the API, you'd send an HTTP ____ request with the device data in the request body, not a GET."
+  },
+  "solution": {
+    "acceptable_answers": ["post"],
+    "explanation": "POST is the standard HTTP method for creating/submitting data, carried in the request body — GET is for reading only and conventionally carries no body, which is why it's the wrong tool for creating a new record."
+  }
+}

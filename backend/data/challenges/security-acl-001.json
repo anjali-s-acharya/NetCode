@@ -1,0 +1,54 @@
+{
+  "id": "security-acl-001",
+  "title": "Blocked Admin Access After ACL Update",
+  "track": "Security",
+  "difficulty": "Medium",
+  "points": 200,
+  "ticket": {
+    "summary": "Network admins report they can no longer SSH into core-sw1 (10.10.1.1) from the management subnet (10.10.99.0/24) after a colleague updated an ACL yesterday to 'tighten security'. All other traffic seems fine.",
+    "reportedBy": "Network Admin Team",
+    "priority": "Medium"
+  },
+  "topology": {
+    "description": "mgmt-workstation (10.10.99.50) connects to core-sw1's management VLAN (VLAN 99, IP 10.10.1.1) to reach the rest of the network for SSH administration. An ACL named MGMT_ACL controls which management-subnet hosts may reach core-sw1.",
+    "nodes": [
+      { "id": "mgmt-workstation", "label": "mgmt-workstation (10.10.99.50)", "type": "client" },
+      { "id": "core-sw1", "label": "core-sw1 (10.10.1.1, mgmt VLAN 99, ACL MGMT_ACL)", "type": "switch" }
+    ],
+    "links": [
+      { "from": "mgmt-workstation", "to": "core-sw1", "label": "SSH, filtered by MGMT_ACL" }
+    ]
+  },
+  "logs": [
+    {
+      "source": "core-sw1 syslog",
+      "content": "%SEC-6-IPACCESSLOGP: list MGMT_ACL denied tcp 10.10.99.50(52344) -> 10.10.1.1(22), 1 packet"
+    }
+  ],
+  "cli_outputs": [
+    {
+      "device": "core-sw1",
+      "command": "show access-lists MGMT_ACL",
+      "output": "Standard IP access list MGMT_ACL\n    10 permit 10.10.99.100\n    20 deny any log"
+    }
+  ],
+  "monitoring": {
+    "metric": "acl_deny_events_mgmt_acl",
+    "notes": "SSH attempts from 10.10.99.50 all show as denied in the last 24h; no denies before yesterday's ACL change."
+  },
+  "hints": [
+    "Compare the source IP in the deny log (10.10.99.50) against what the ACL actually permits.",
+    "Standard ACLs only match source IP — the colleague likely permitted the wrong single host instead of the whole subnet.",
+    "Line 10 permits only 10.10.99.100, not the /24 — everything else in that subnet, including .50, falls through to the explicit deny."
+  ],
+  "solution": {
+    "root_cause": "The updated ACL only permits a single host (10.10.99.100) instead of the full management subnet (10.10.99.0/24), so all other admin workstations are denied by the implicit/explicit deny.",
+    "fix": "Replace the host-specific permit line with a subnet-based permit, e.g. 'permit 10.10.99.0 0.0.0.255', so the entire authorized management subnet is allowed.",
+    "acceptable_answers": [
+      "permit 10.10.99.0 0.0.0.255",
+      "single host",
+      "wrong subnet",
+      "should permit the subnet"
+    ]
+  }
+}

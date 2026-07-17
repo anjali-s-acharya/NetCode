@@ -1,0 +1,28 @@
+{
+  "id": "restapi-intermediate-001",
+  "title": "Paginate Through All Results",
+  "track": "REST API",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "A mock API paginates results: each page response looks like {\"items\": [...], \"next_page\": 2} or {\"items\": [...], \"next_page\": null} on the last page. Given fetch_page(page_number) which returns one page's dict, fill in the loop body of fetch_all_items so it follows next_page until it's null and returns the combined list of all items across pages.",
+    "code_context": "def fetch_all_items(fetch_page) -> list:\n    results = []\n    page_number = 1\n    while page_number is not None:\n        ____\n    return results\n\n# 3 pages of 2 items each, next_page None on page 3 -> all 6 items returned in order",
+    "use_case": "This is the exact loop shape behind pagination for GitHub's API, most REST APIs with cursor/page-based results, and any inventory sync that has to page through hundreds of devices."
+  },
+  "hints": [
+    "Call fetch_page(page_number) to get the current page's dict.",
+    "Add that page's items to your running results list with .extend(), not .append() (items is already a list).",
+    "page = fetch_page(page_number)\nresults.extend(page['items'])\npage_number = page['next_page']"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      ["fetch_page(page_number)"],
+      ["results.extend(page['items'])", "extend(page"],
+      ["page['next_page']", "next_page']"]
+    ],
+    "min_matches": 2,
+    "explanation": "Fetch the current page, extend results with its items, then advance using the page's own next_page value: page = fetch_page(page_number); results.extend(page['items']); page_number = page['next_page']. The loop ends naturally once next_page is None."
+  }
+}

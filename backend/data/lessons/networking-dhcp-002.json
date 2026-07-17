@@ -1,0 +1,26 @@
+{
+  "id": "networking-dhcp-002",
+  "title": "What Information Does DHCP Hand Out?",
+  "category": "networking",
+  "track": "DHCP",
+  "order": 2,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "Default gateway and DNS server addresses",
+    "The client's MAC address history",
+    "The switch's spanning-tree priority",
+    "The DNS zone's SOA record"
+  ],
+  "content": {
+    "explanation": "DHCP hands out more than just an IP address. A typical offer bundles the IP with a subnet mask, a default gateway, one or more DNS servers, a domain name, and a lease time — everything a device needs to actually talk to the network, not just have an address on it.",
+    "example": "ip dhcp pool OFFICE-WIFI\n network 10.20.1.0 255.255.255.0\n default-router 10.20.1.1\n dns-server 10.20.1.10\n domain-name corp.local\n lease 8"
+  },
+  "check": {
+    "statement": "Besides an IP address, which of these is typically included in a DHCP offer?"
+  },
+  "solution": {
+    "acceptable_answers": ["default gateway and dns server addresses"],
+    "explanation": "A DHCP offer bundles the IP with the subnet mask, default gateway, and DNS server addresses (and often a domain name and lease time) — a device configured only with an IP and no gateway/DNS couldn't reach anything outside its own subnet."
+  }
+}

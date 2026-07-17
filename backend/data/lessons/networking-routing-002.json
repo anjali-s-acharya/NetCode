@@ -1,0 +1,26 @@
+{
+  "id": "networking-routing-002",
+  "title": "The Default Route",
+  "category": "networking",
+  "track": "Routing",
+  "order": 2,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "0.0.0.0/0",
+    "255.255.255.255/32",
+    "127.0.0.1/32",
+    "10.0.0.0/8"
+  ],
+  "content": {
+    "explanation": "A default route (also called the 'gateway of last resort') is a routing table entry that matches any destination that isn't covered by a more specific route. It's how a router knows where to send traffic bound for the internet or anywhere else it doesn't have an explicit route for.",
+    "example": "show ip route\nS*   0.0.0.0/0 [1/0] via 203.0.113.1\nC    10.20.1.0/24 is directly connected, GigabitEthernet0/1\n# Anything not matching 10.20.1.0/24 falls through to the 0.0.0.0/0 default route."
+  },
+  "check": {
+    "statement": "Which routing table entry represents the 'gateway of last resort' matching any destination with no more specific route?"
+  },
+  "solution": {
+    "acceptable_answers": ["0.0.0.0/0"],
+    "explanation": "0.0.0.0/0 is the least specific possible route — a /0 mask matches every address — so by longest-prefix-match rules it's only ever used when nothing more specific applies, which is exactly the definition of a default route."
+  }
+}

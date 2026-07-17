@@ -66,7 +66,7 @@ cli_outputs, monitoring, hints, solution) and restart the backend — `seed_chal
 only inserts ids that aren't already in the DB, so existing challenges and any local
 progress are left alone. Points convention: Easy = 100, Medium = 200, Hard = 350.
 
-Currently seeded: 30 challenges across DNS, DHCP, Routing, Switching, Security, SD-WAN,
+Currently seeded: 32 challenges across DNS, DHCP, Routing, Switching, Security, SD-WAN,
 and Automation ("automation-broke-it": outages caused by bad Ansible/Netmiko/Terraform
 changes).
 
@@ -94,9 +94,16 @@ fill_blank. Grading compares the submitted answer against
 allows a substring match either direction — so for fill_blank, list the specific code
 or phrase you expect, not single generic words.
 
-Currently seeded: 10 challenges — Python ×3 (incl. a pyATS/Genie problem and a syslog
-kata), REST API ×2 (incl. Catalyst Center), Ansible ×2 (incl. an idempotency kata),
-plus Git & GitHub, Netmiko, and a Terraform kata (`moved` block).
+Currently seeded: 22 challenges — Python ×7 (incl. a pyATS/Genie problem, a syslog
+kata, and IPv4/log/CSV fill-in-the-blank drills), REST API ×6 (incl. Catalyst Center,
+pagination, and retry/backoff), Git & GitHub ×5 (.gitignore, merge conflicts, CI YAML,
+conventional commits), Ansible ×2 (incl. an idempotency kata), Netmiko ×1, and a
+Terraform kata (`moved` block).
+
+Note: the Python/REST API problems above are fill-in-the-blank/MCQ against a fixed
+solution, not full code execution against hidden test cases — running arbitrary
+submitted code safely needs a sandboxed execution service (see the scaling note in any
+future content-pack README), which this MVP doesn't have yet.
 
 ## Adding a new Capstone
 
@@ -107,6 +114,10 @@ Each stage has `title`, `stage_type` (diagnose|fix|guardrail), `question_type`
 content}]}), `choices` (mcq only), and `solution` (same acceptable_answers/min_matches
 format as NetCode). Stages unlock sequentially in the UI; each is graded via
 `POST /api/capstones/{id}/stages/{n}/submit`.
+
+Currently seeded: 3 capstones — "The Playbook That Broke OSPF" (Ansible + Routing),
+"Bad Ansible Playbook Pushed Wrong VLAN" (missing DHCP relay), and "Terraform Apply
+Silently Removed a Route Table Entry" (`aws_route` vs inline `route` blocks).
 
 ## Adding a new Basics lesson
 
@@ -125,9 +136,9 @@ holds the teaching material shown before the check (`explanation` + a short `exa
 (`question_type`/`choices`/`solution.acceptable_answers`) — there's no hint system here
 since the preceding `content` already teaches the concept.
 
-Currently seeded: 4 networking lessons (DNS, DHCP, Routing, Switching) and 3 coding
-lessons (Python, REST API, GitHub) — one lesson per track, establishing the pattern for
-more to be appended later.
+Currently seeded: 21 lessons — 3 per track across DNS, DHCP, Routing, Switching
+(networking) and Python, REST API, GitHub (coding), each track building from a core
+concept lesson (order 1) through two follow-ups (orders 2-3), unlocking in sequence.
 
 ## Content sources
 

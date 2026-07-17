@@ -1,0 +1,26 @@
+{
+  "id": "networking-switching-002",
+  "title": "What Is Spanning Tree Protocol (STP)?",
+  "category": "networking",
+  "track": "Switching",
+  "order": 2,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "To prevent a Layer 2 broadcast loop that would flood the network",
+    "To save electricity on unused switch ports",
+    "Because switches can only have one active uplink by hardware design",
+    "To force all traffic through the fastest link only"
+  ],
+  "content": {
+    "explanation": "Switches are often cabled with redundant links between them for resilience — but at Layer 2 there's no TTL to stop a frame, so a loop between two switches would circulate broadcast/unknown-unicast traffic forever, doubling and redoubling until the network melts down. Spanning Tree Protocol (STP) prevents this by calculating a loop-free tree and putting redundant ports into a 'blocking' state, ready to activate only if the active path fails.",
+    "example": "show spanning-tree vlan 10\nInterface           Role Sts  Cost  Prio.Nbr\nGi0/1               Root FWD  4     128.1\nGi0/2               Altn BLK  4     128.2   <- redundant link, blocked to prevent a loop"
+  },
+  "check": {
+    "statement": "Why does STP block one of two redundant links between switches instead of using both?"
+  },
+  "solution": {
+    "acceptable_answers": ["to prevent a layer 2 broadcast loop that would flood the network"],
+    "explanation": "Without STP, a redundant Layer 2 path creates a loop with no hop-count/TTL to stop it, so broadcast and unknown-unicast frames circulate and multiply endlessly. STP blocks the redundant port to keep the topology loop-free, and only unblocks it automatically if the active path fails."
+  }
+}

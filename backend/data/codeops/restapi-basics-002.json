@@ -1,0 +1,30 @@
+{
+  "id": "restapi-basics-002",
+  "title": "Handle a Non-200 Response",
+  "track": "REST API",
+  "difficulty": "Easy",
+  "points": 100,
+  "question_type": "mcq",
+  "choices": [
+    "if status_code == 200: return 'ok'\nif status_code == 404: return 'not_found'\nif status_code >= 500: return 'server_error'\nreturn 'unknown_error'",
+    "if status_code == 200: return 'ok'\nif status_code == 404: return 'not_found'\nif status_code > 500: return 'server_error'\nreturn 'unknown_error'",
+    "if status_code == 200: return 'ok'\nif status_code >= 400: return 'not_found'\nif status_code >= 500: return 'server_error'\nreturn 'unknown_error'",
+    "if status_code == 200: return 'ok'\nif status_code >= 500: return 'server_error'\nreturn 'unknown_error'"
+  ],
+  "problem": {
+    "statement": "You need safe_get_status(status_code, body) to return 'ok' for 200, 'not_found' for 404, 'server_error' for any code >= 500, and 'unknown_error' for everything else — simulating the branching logic you'd write around a real requests.get() call. Which implementation is correct?",
+    "code_context": "safe_get_status(200, {}) -> 'ok'\nsafe_get_status(404, {}) -> 'not_found'\nsafe_get_status(500, {}) -> 'server_error'\nsafe_get_status(503, {}) -> 'server_error'\nsafe_get_status(401, {}) -> 'unknown_error'",
+    "use_case": "This pattern replaces silently trusting response.json() when the call actually failed — real API clients branch on status code before ever touching the response body."
+  },
+  "hints": [
+    "Check the boundary carefully: does the option handle exactly 500, or only strictly greater than 500?",
+    "Watch for a 'not_found' check that's actually a broad range (>= 400) instead of the exact code 404 — that would wrongly catch 401, 500, and more.",
+    "The correct version checks 200 and 404 exactly, then >= 500 (inclusive) for server_error, falling through to unknown_error otherwise."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "if status_code == 200: return 'ok'\nif status_code == 404: return 'not_found'\nif status_code >= 500: return 'server_error'\nreturn 'unknown_error'"
+    ],
+    "explanation": "The correct version checks 200 and 404 as exact matches, then >= 500 (inclusive, so 500 itself counts) for server_error, and falls through to unknown_error otherwise. The '> 500' variant misclassifies exactly 500; the '>= 400' not_found check wrongly catches 401 and 500 before they reach their real branches; the version missing the 404 check entirely misclassifies it as unknown_error."
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "github-intermediate-001",
+  "title": "Fix a Broken GitHub Actions Workflow",
+  "track": "Git & GitHub",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "This GitHub Actions workflow is supposed to run pytest on every push, but the YAML is invalid and the workflow never runs. Identify the missing syntax: what needs to be added to the 'on' trigger line, and what needs to be added to the 'with' key?",
+    "code_context": "name: CI\non push:\n  branches: [ main ]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Set up Python\n        uses: actions/setup-python@v5\n        with\n          python-version: '3.11'\n      - run: pip install -r requirements.txt\n      - run: pytest",
+    "use_case": "YAML is whitespace- and colon-sensitive, and a single missing colon silently breaks an entire CI pipeline with a cryptic parser error — this is one of the most common first bugs anyone hits writing GitHub Actions workflows."
+  },
+  "hints": [
+    "YAML is indentation- and colon-sensitive — check every top-level and nested key for a missing ':'.",
+    "The 'on' trigger needs its own colon, with 'push:' nested underneath it, not on the same line.",
+    "Every mapping key in YAML (like 'with') needs a trailing colon even if nothing follows on that line — the fix is 'on:' (with 'push:' nested below) and 'with:'."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "on:",
+      "with:"
+    ],
+    "min_matches": 2,
+    "explanation": "Two YAML syntax bugs: 'on push:' needed to become 'on:' with 'push:' nested beneath it, and 'with' needed a trailing colon ('with:') to be a valid mapping key."
+  }
+}

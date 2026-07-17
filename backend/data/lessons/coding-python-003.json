@@ -1,0 +1,21 @@
+{
+  "id": "coding-python-003",
+  "title": "Functions and Parameters",
+  "category": "coding",
+  "track": "Python",
+  "order": 3,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "A function packages up a piece of logic under a name so you can reuse it instead of copy-pasting the same code everywhere. You define one with 'def', give it a name and a list of parameters (the inputs it needs), and it can 'return' a value back to whoever called it.",
+    "example": "____ is_up(status):\n    return status == \"up\"\n\nprint(is_up(\"up\"))     # True\nprint(is_up(\"down\"))   # False"
+  },
+  "check": {
+    "statement": "Fill in the blank: what keyword starts a function definition in Python, as in '____ is_up(status):'?"
+  },
+  "solution": {
+    "acceptable_answers": ["def"],
+    "explanation": "'def' is the keyword that defines a function — 'def is_up(status):' names the function is_up and declares it takes one parameter, status; the indented block underneath is the function's body, and 'return' sends a value back to the caller."
+  }
+}

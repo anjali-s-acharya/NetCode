@@ -1,0 +1,21 @@
+{
+  "id": "coding-python-002",
+  "title": "Control Flow: if/else and Loops",
+  "category": "coding",
+  "track": "Python",
+  "order": 2,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "Python programs make decisions with if/elif/else, and repeat work with loops. A 'for' loop walks through each item in a list one at a time, and an 'if' inside it lets you act only on the items that meet some condition — this combination is the backbone of almost every automation script.",
+    "example": "interfaces = [\n    {\"name\": \"Gi0/1\", \"status\": \"up\"},\n    {\"name\": \"Gi0/2\", \"status\": \"down\"},\n]\n\nfor iface in interfaces:\n    if iface[\"status\"] ____ \"up\":\n        print(iface[\"name\"])\n# Expected output: Gi0/2"
+  },
+  "check": {
+    "statement": "Fill in the blank: to only print interfaces whose status is NOT 'up', what goes in 'if iface[\"status\"] ____ \"up\":'?"
+  },
+  "solution": {
+    "acceptable_answers": ["!=", "is not"],
+    "explanation": "!= is Python's 'not equal to' operator — 'if iface[\"status\"] != \"up\":' runs the block only for interfaces whose status is anything other than 'up', which is exactly what you want when hunting for down interfaces."
+  }
+}

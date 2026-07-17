@@ -1,0 +1,103 @@
+{
+  "id": "capstone-ansible-001",
+  "title": "Bad Ansible Playbook Pushed Wrong VLAN to 12 Switches",
+  "track": "Automation + Ansible",
+  "points_total": 500,
+  "stages": [
+    {
+      "title": "Stage 1 — Diagnose the outage",
+      "stage_type": "diagnose",
+      "question_type": "free_text",
+      "points": 200,
+      "context": {
+        "narrative": "At 02:00 a scheduled Ansible job ran to move access ports on 12 access switches from VLAN 20 to VLAN 30 as part of a segmentation project. By 06:00, helpdesk has 40+ tickets: devices on those switches can't reach DHCP or the internet. VLAN 20 = old user VLAN (has DHCP relay configured); VLAN 30 = new user VLAN (target).",
+        "artifacts": [
+          {
+            "label": "ansible run log",
+            "content": "ansible-playbook run at 02:00:03, 'migrate_vlan.yml', target: sw-acc-*, changed=12, failed=0"
+          },
+          {
+            "label": "DHCP server log (06:02)",
+            "content": "0 DISCOVER packets relayed from VLAN 30 in the last 4 hours (expected: hundreds)"
+          },
+          {
+            "label": "sw-acc-01: show vlan brief (excerpt)",
+            "content": "30   NEW_USER_VLAN   active   Gi0/1, Gi0/2, Gi0/3..."
+          },
+          {
+            "label": "sw-acc-01: show run interface vlan 30",
+            "content": "interface Vlan30\n no ip address\n! (no 'ip helper-address' configured)"
+          },
+          {
+            "label": "sw-acc-01: show run interface vlan 20 (working, for comparison)",
+            "content": "interface Vlan20\n ip address 10.20.0.1 255.255.255.0\n ip helper-address 10.0.0.53"
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          "ip helper-address",
+          "missing dhcp relay",
+          "dhcp relay not configured on vlan 30",
+          "helper-address missing",
+          "no helper-address"
+        ],
+        "explanation": "The migration playbook moved switchports to VLAN 30 but did not configure 'ip helper-address' on the VLAN 30 SVI, so DHCP requests from newly-migrated clients are never relayed to the DHCP server, leaving them without an IP address. VLAN 20's working config confirms the relay was only ever set up there."
+      }
+    },
+    {
+      "title": "Stage 2 — Write the corrected automation",
+      "stage_type": "fix",
+      "question_type": "fill_blank",
+      "points": 150,
+      "context": {
+        "narrative": "Fix the playbook so it also configures the DHCP relay on the target VLAN's SVI whenever it migrates ports there. Fill in the missing config line.",
+        "artifacts": [
+          {
+            "label": "fixed task (your edit)",
+            "content": "- name: Ensure DHCP relay is configured on target VLAN SVI\n  ios_config:\n    lines:\n      - ____\n    parents: interface Vlan{{ target_vlan }}\n  when: target_vlan is defined"
+          },
+          {
+            "label": "reference (VLAN 20's working relay config)",
+            "content": "ip helper-address 10.0.0.53"
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          "ip helper-address 10.0.0.53"
+        ],
+        "explanation": "Adding 'ip helper-address 10.0.0.53' to the target VLAN's SVI as part of the migration task (matching VLAN 20's config) means every future migration automatically carries the DHCP relay along with the port move."
+      }
+    },
+    {
+      "title": "Stage 3 — Add the guardrail",
+      "stage_type": "guardrail",
+      "question_type": "free_text",
+      "points": 150,
+      "context": {
+        "narrative": "The incident review wants a guardrail so this can't silently happen again — even for the next engineer who migrates a different VLAN and forgets the relay entirely. Describe the pre-flight check you'd add to the playbook.",
+        "artifacts": [
+          {
+            "label": "current playbook (no pre-flight check)",
+            "content": "- name: migrate access ports\n  ios_config: ...\n  loop: \"{{ target_ports }}\"\n# port migration runs immediately, no verification of target VLAN SVI state first"
+          }
+        ]
+      },
+      "choices": [],
+      "solution": {
+        "acceptable_answers": [
+          "pre-flight check",
+          "assert",
+          "verify before migrating",
+          "fail early",
+          "check before the migration runs",
+          "ios_command and assert"
+        ],
+        "explanation": "Add a pre-flight Ansible check task (using ios_command to read the target VLAN's SVI config plus an assert) that verifies 'ip helper-address' already exists on the target VLAN's SVI before the port-migration task runs, and fail the play early with a clear error if it's missing — turning a silent post-migration outage into a blocked pre-migration deploy."
+      }
+    }
+  ]
+}

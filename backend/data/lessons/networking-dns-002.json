@@ -1,0 +1,26 @@
+{
+  "id": "networking-dns-002",
+  "title": "Recursive vs Authoritative DNS Servers",
+  "category": "networking",
+  "track": "DNS",
+  "order": 2,
+  "points": 20,
+  "question_type": "mcq",
+  "choices": [
+    "The zone's authoritative name server",
+    "The recursive resolver",
+    "A root server",
+    "The client's local hosts file"
+  ],
+  "content": {
+    "explanation": "A DNS lookup usually involves two different roles. The recursive resolver (often your ISP's or company's DNS server) does the legwork on your behalf: it walks the hierarchy — asking a root server, then a TLD server, then the zone's authoritative server — and caches the final answer. The authoritative name server is the one that actually holds the real records for that specific zone; it's the source of truth.",
+    "example": "You query crm.corp.local:\n1. Your resolver asks a root server: \"who handles .local?\" -> referral\n2. It asks the .local TLD server: \"who handles corp.local?\" -> referral to corp.local's authoritative server\n3. It asks corp.local's authoritative server directly: \"what's the A record for crm?\" -> 172.16.5.20\nOnly step 3 has the actual answer; steps 1-2 were just referrals."
+  },
+  "check": {
+    "statement": "Which server in the DNS hierarchy actually stores the authoritative record for corp.local's crm host?"
+  },
+  "solution": {
+    "acceptable_answers": ["the zone's authoritative name server"],
+    "explanation": "The authoritative name server for corp.local is the one that actually holds the real A/MX/CNAME records for that zone — root and TLD servers only issue referrals pointing toward it, and the recursive resolver just does the walking and caches whatever the authoritative server answers."
+  }
+}

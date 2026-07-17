@@ -1,0 +1,28 @@
+{
+  "id": "github-intermediate-002",
+  "title": "Write Conventional Commit Messages",
+  "track": "Git & GitHub",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "You made 3 changes on one feature branch: (1) added a new function to validate subnet masks, (2) fixed a bug where DHCP lease time was parsed as a string instead of an int, (3) updated the README with setup instructions. Name the three Conventional Commits types (type(scope): description format) you'd use for these three changes, as if committing them separately instead of as one big commit.",
+    "code_context": "",
+    "use_case": "Conventional Commits types drive automated changelogs and semantic-version bumps in most CI pipelines — using 'fix' for a bug and 'feat' for new capability isn't just style, it's what tooling like semantic-release reads to decide the next version number."
+  },
+  "hints": [
+    "Conventional Commits types: feat (new feature), fix (bug fix), docs (documentation only), refactor, test, chore, etc.",
+    "Keep each message on one line, imperative mood: 'add' not 'added'.",
+    "The new function is a feat, the parsing bug is a fix, and the README update is docs."
+  ],
+  "solution": {
+    "acceptable_answers": [
+      "feat",
+      "fix",
+      "docs"
+    ],
+    "min_matches": 3,
+    "explanation": "'feat(validation): add subnet mask validation function', 'fix(dhcp): parse lease time as int instead of string', 'docs(readme): add setup instructions' — each commit is scoped to one logical change and labeled with the Conventional Commits type matching its intent, so changelogs stay easy to scan and semantic-release tooling can pick the right version bump."
+  }
+}

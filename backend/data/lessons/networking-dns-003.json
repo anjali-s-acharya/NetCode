@@ -1,0 +1,21 @@
+{
+  "id": "networking-dns-003",
+  "title": "DNS Caching and TTL",
+  "category": "networking",
+  "track": "DNS",
+  "order": 3,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "Every DNS record has a TTL (Time To Live), in seconds, telling resolvers how long they're allowed to cache the answer before asking again. A short TTL means changes propagate faster but the authoritative server gets asked more often; a long TTL reduces load but means an old, cached answer can keep being served for a while after you change the record.",
+    "example": "dig crm.corp.local\n;; ANSWER SECTION:\ncrm.corp.local.   3600   IN   A   172.16.5.20\n                   ^^^^ TTL in seconds (1 hour) — a resolver won't re-check\n                        this record again until that hour is up."
+  },
+  "check": {
+    "statement": "Fill in the blank: before a planned IP address change, lowering a record's ____ ahead of time lets resolvers pick up the new address faster once you cut over, instead of serving the old cached one for hours."
+  },
+  "solution": {
+    "acceptable_answers": ["ttl", "time to live"],
+    "explanation": "Lowering the TTL well before a cutover (a common practice called 'TTL priming') means resolvers stop trusting long-lived cached copies of the old record right around the time you make the change, so the new address propagates in minutes instead of hours."
+  }
+}

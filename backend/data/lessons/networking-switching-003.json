@@ -1,0 +1,21 @@
+{
+  "id": "networking-switching-003",
+  "title": "Trunk Ports and 802.1Q Tagging",
+  "category": "networking",
+  "track": "Switching",
+  "order": 3,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "An access port carries traffic for exactly one VLAN, untagged. A trunk port carries traffic for multiple VLANs over a single physical link — to keep each frame's VLAN membership straight as it crosses the link, the switch inserts an 802.1Q tag into the frame identifying which VLAN it belongs to. The one VLAN a trunk doesn't tag (by default) is called the native VLAN.",
+    "example": "interface GigabitEthernet0/1\n switchport mode trunk\n switchport trunk allowed vlan 10,20,99\n switchport trunk native vlan 99\n# VLANs 10 and 20 cross this link tagged; VLAN 99 crosses untagged (native)"
+  },
+  "check": {
+    "statement": "Fill in the blank: a trunk port uses 802.1Q ____ to identify which VLAN each frame belongs to as it crosses the link."
+  },
+  "solution": {
+    "acceptable_answers": ["tags", "tagging", "vlan tag", "tag"],
+    "explanation": "802.1Q tagging inserts a small header into each frame carrying its VLAN ID, so the switch on the other end of the trunk knows which VLAN to deliver it into — without tags, a shared trunk link couldn't distinguish traffic from different VLANs."
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "networking-dhcp-003",
+  "title": "DHCP Lease Renewal",
+  "category": "networking",
+  "track": "DHCP",
+  "order": 3,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "A DHCP lease doesn't just expire and disconnect the client — it renews quietly in the background. Once a set fraction of the lease time has passed, the client tries to renew directly with the server that gave it the lease, keeping the same address without a new DHCPDISCOVER broadcast.",
+    "example": "Lease time: 8 hours\nAt 4 hours (50% elapsed) -> client sends DHCPREQUEST directly to its original server to renew\nIf that fails, it keeps retrying, and later (87.5% elapsed) will broadcast to ANY DHCP server to rebind"
+  },
+  "check": {
+    "statement": "Fill in the blank: a DHCP client first attempts to renew its lease with its original server once ____ percent of the lease time has elapsed."
+  },
+  "solution": {
+    "acceptable_answers": ["50", "half"],
+    "explanation": "At 50% of the lease time (the T1 timer), the client quietly sends a unicast DHCPREQUEST to the server that issued the lease, asking to renew — no broadcast, no new address, nothing visible to the user."
+  }
+}

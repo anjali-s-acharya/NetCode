@@ -1,0 +1,21 @@
+{
+  "id": "networking-routing-003",
+  "title": "Static vs Dynamic Routing",
+  "category": "networking",
+  "track": "Routing",
+  "order": 3,
+  "points": 20,
+  "question_type": "fill_blank",
+  "choices": [],
+  "content": {
+    "explanation": "A static route is a routing table entry an engineer types in by hand — it never changes on its own, even if the path it points to goes down. A dynamic routing protocol (like OSPF or BGP) has routers exchange routing information with each other automatically, so the network re-converges on a new path if a link fails, with no human involved.",
+    "example": "Static: ip route 172.20.0.0 255.255.0.0 10.1.1.1\n  (always points at 10.1.1.1, even if that link is dead)\n\nOSPF (dynamic): routers advertise their connected networks to neighbors;\n  if a link fails, neighbors detect it and recalculate a new best path within seconds."
+  },
+  "check": {
+    "statement": "Fill in the blank: unlike a static route, a ____ routing protocol like OSPF automatically finds a new path if a link fails."
+  },
+  "solution": {
+    "acceptable_answers": ["dynamic"],
+    "explanation": "Dynamic routing protocols continuously exchange reachability information between routers, so when a link fails the affected routers detect it and recalculate — a static route has no such mechanism and would keep pointing at a dead path until someone fixes it manually."
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "restapi-intermediate-002",
+  "title": "Retry with Exponential Backoff",
+  "track": "REST API",
+  "difficulty": "Medium",
+  "points": 200,
+  "question_type": "fill_blank",
+  "choices": [],
+  "problem": {
+    "statement": "call_with_retry(api_call, backoff_fn, max_attempts=3) should retry api_call() up to max_attempts times whenever it raises TimeoutError, calling backoff_fn(attempt) before each retry (but not after the final failed attempt), and re-raising the TimeoutError if every attempt fails. Fill in the except block.",
+    "code_context": "def call_with_retry(api_call, backoff_fn, max_attempts: int = 3) -> dict:\n    for attempt in range(1, max_attempts + 1):\n        try:\n            return api_call()\n        except TimeoutError:\n            ____\n\n# api_call succeeds on attempt 2 of 3 -> returns result, backoff_fn called once (after attempt 1)\n# api_call always raises TimeoutError, max_attempts=3 -> raises TimeoutError after 3 attempts, backoff_fn called twice",
+    "use_case": "Retry-with-backoff around a real requests.get()/post() call is standard practice against any API with transient failures or rate limits — getting the 'don't back off after the last attempt, just re-raise' detail right is what separates working retry logic from an infinite-feeling hang."
+  },
+  "hints": [
+    "On the last attempt, there's no point backing off — you're out of retries, so re-raise instead.",
+    "A bare 'raise' inside the except block re-raises the exception that's currently being handled.",
+    "if attempt == max_attempts:\n    raise\nbackoff_fn(attempt)"
+  ],
+  "solution": {
+    "acceptable_answers": [
+      ["attempt == max_attempts", "== max_attempts"],
+      ["raise"],
+      ["backoff_fn(attempt)"]
+    ],
+    "min_matches": 2,
+    "explanation": "On the final attempt, re-raise instead of backing off: if attempt == max_attempts: raise. Otherwise call backoff_fn(attempt) and let the for loop try again — the try block's own 'return api_call()' handles the success path."
+  }
+}
